@@ -135,12 +135,12 @@ public class TBuild {
                 executeBuild();
                 break;
 
-            case "export":
+            case "export-small":
                 ensureBuilt();
                 executeExport(false);
                 break;
 
-            case "export-fat":
+            case "export":
                 ensureBuilt();
                 executeExport(true);
                 break;
@@ -181,8 +181,8 @@ public class TBuild {
                 System.out.println("Verfuegbare Befehle:");
                 System.out.println("  init              - Initialisiert das Projekt");
                 System.out.println("  build             - Kompiliert das Projekt");
-                System.out.println("  export            - Erstellt Export.jar");
-                System.out.println("  export-fat        - Erstellt Export-Fat.jar (inkl. Abhaengigkeiten)");
+                System.out.println("  export-small       - Erstellt eine .jar (ohne Abhaengigkeiten)");
+                System.out.println("  export            - Erstellt eine .jar (inkl. Abhaengigkeiten)");
                 System.out.println("  build-export-fat  - Build + Fat-Export in einem Schritt (fuer CI/CD)");
                 System.out.println("  jpackage          - Erstellt nativen Installer via jpackage");
                 System.out.println("  set-main <klasse> - Setzt die Main-Klasse (z.B. set-main de.pkg.Main)");
@@ -214,7 +214,7 @@ public class TBuild {
 
     private void createUI() {
         frame = new JFrame("T-build - Simple Java Build Tool");
-        frame.setSize(1100, 650);
+        frame.setSize(1200, 650);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         JPanel root = new JPanel(new BorderLayout(10, 10));
         root.setBorder(new EmptyBorder(10, 10, 10, 10));
@@ -226,9 +226,10 @@ public class TBuild {
         JButton mainBtn      = new JButton("Main-Klasse setzen");
         JButton versionBtn   = new JButton("Version setzen");
         JButton clearBtn     = new JButton("Konsole leeren");
-        JButton exportJarBtn = new JButton("Export JAR");
-        JButton exportFatBtn = new JButton("Export Fat JAR");
+        JButton exportJarBtn = new JButton("Export small JAR");
+        JButton exportFatBtn = new JButton("Export JAR");
         JButton jpackageBtn  = new JButton("jpackage Installer");
+        JButton nameBtn      = new JButton("Namen festlegen");
 
         initBtn.addActionListener(e -> initProject());
         buildBtn.addActionListener(e -> runBuild());
@@ -241,6 +242,7 @@ public class TBuild {
             executeExport(true);
             executeJPackage();
         }).start());
+        nameBtn.addActionListener(e-> setName());
 
         top.add(initBtn);
         top.add(buildBtn);
@@ -250,6 +252,7 @@ public class TBuild {
         top.add(mainBtn);
         top.add(versionBtn);
         top.add(clearBtn);
+        top.add(nameBtn);
         root.add(top, BorderLayout.NORTH);
 
         console = new JTextPane();
@@ -899,7 +902,8 @@ public class TBuild {
     private void executeExport(boolean fat) {
         try {
             String mainClass = getMainClass();
-            String jarName   = fat ? "Export-Fat.jar" : "Export.jar";
+            String appName = getAppName();
+            String jarName = fat ? appName + ".jar" : appName + "-small.jar";
             File tempDir = new File("build_temp");
             log("[INFO] Starte Export: " + jarName + "...\n", Color.CYAN);
             if (tempDir.exists()) deleteDirectory(tempDir);
@@ -1000,7 +1004,7 @@ public class TBuild {
                 return;
             }
 
-            File fatJar = new File("Export-Fat.jar");
+            File fatJar = new File(getAppName() + ".jar");
             if (!fatJar.exists()) {
                 log("[FEHLER] Export-Fat.jar nicht gefunden.\n", Color.RED);
                 if (isCliMode) System.exit(1);
@@ -1029,7 +1033,7 @@ public class TBuild {
             List<String> cmd = new ArrayList<>();
             cmd.add(jpackageTool);
             cmd.add("--input");      cmd.add(".");
-            cmd.add("--main-jar");   cmd.add("Export-Fat.jar");
+            cmd.add("--main-jar");   cmd.add(getAppName() + ".jar");
             cmd.add("--main-class"); cmd.add(mainClass);
             cmd.add("--name");       cmd.add(appName);
             cmd.add("--dest");       cmd.add("dist");
@@ -1253,4 +1257,16 @@ public class TBuild {
         String groupId, artifactId, version, scope;
         boolean optional;
     }
+
+    private void setName() {
+        String current = getAppName();
+        String val = (String) JOptionPane.showInputDialog(
+                frame, "Name der App:",
+                "Namen festlegen", JOptionPane.PLAIN_MESSAGE, null, null, current);
+        if (val != null && !val.trim().isEmpty()) {
+            saveConfig(getMainClass(), val.trim(), getVersion()); // <-- das war der Fehler
+            log("[INFO] App-Name auf '" + val.trim() + "' gesetzt.\n", Color.LIGHT_GRAY);
+        }
+    }
+
 }
