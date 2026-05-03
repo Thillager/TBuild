@@ -3,6 +3,7 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.Toolkit;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -41,6 +42,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTextField;
 import javax.swing.JTextPane;
+import javax.swing.JToolBar;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
@@ -214,13 +216,14 @@ public class TBuild {
 
     private void createUI() {
         frame = new JFrame("T-build - Simple Java Build Tool");
-        frame.setSize(1200, 650);
+        frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         JPanel root = new JPanel(new BorderLayout(10, 10));
         root.setBorder(new EmptyBorder(10, 10, 10, 10));
         frame.setContentPane(root);
 
-        JPanel top = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JToolBar top = new JToolBar();
+        top.setFloatable(false);
         JButton initBtn      = new JButton("Projekt initialisieren");
         JButton buildBtn     = new JButton("Bauen & Ausfuehren");
         JButton mainBtn      = new JButton("Main-Klasse setzen");
