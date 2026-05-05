@@ -1,5 +1,5 @@
 <project>
   <mainClass>TBuild</mainClass>
-  <appName>TBuild-17</appName>
-  <version>1.0.0</version>
+  <appName>TBuild</appName>
+  <version>1.1.0</version>
 </project>

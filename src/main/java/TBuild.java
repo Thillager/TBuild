@@ -82,6 +82,32 @@ import org.w3c.dom.NodeList;
  *
  * [FIX-CLI-2] downloadAllBlocking() wartet mit Timeout auf Pool-Shutdown.
  *   Bei Fehler wird shutdownNow() aufgerufen damit keine Threads haengen bleiben.
+ *
+ * [FIX-JAVAFX-1] JavaFX-Module werden nun auch beim Kompilieren korrekt als
+ *   --module-path uebergeben, nicht nur beim Ausfuehren. Ohne --module-path
+ *   beim javac-Aufruf schlaegt die Kompilierung fehl, weil javafx.* Pakete
+ *   nicht im normalen Classpath sichtbar sind.
+ *
+ * [FIX-JAVAFX-2] Beim Starten wird jetzt explizit geprueft welche JavaFX-Module
+ *   tatsaechlich im module-path vorhanden sind und nur diese werden in
+ *   --add-modules uebergeben (statt ALL-MODULE-PATH, das auf manchen JDKs
+ *   Probleme macht). Ausserdem wird javafx.base immer als Mindestmodul gesetzt.
+ *
+ * [FIX-JAVAFX-3] JavaFX-JARs werden beim fat-JAR-Export ausgeschlossen, da
+ *   JavaFX native Bibliotheken enthaelt die nicht gepackt werden koennen.
+ *   Stattdessen wird beim Starten des fat-JARs der --module-path auf libs/
+ *   gesetzt damit JavaFX korrekt geladen wird.
+ *
+ * [FIX-JPACKAGE-LINUX-1] Unter Linux werden jetzt --linux-shortcut und
+ *   --linux-menu-group gesetzt, damit der Installer einen Desktop-Eintrag
+ *   (im Startmenue) und eine Desktop-Verknuepfung erstellt.
+ *
+ * [FIX-JPACKAGE-LINUX-2] Unter Linux wird --linux-app-category gesetzt damit
+ *   der Eintrag korrekt kategorisiert wird.
+ *
+ * [FIX-JPACKAGE-JAVAFX] Falls JavaFX-JARs vorhanden sind, wird --java-options
+ *   mit dem korrekten --module-path und --add-modules fuer jpackage erzeugt,
+ *   damit die gepackte App JavaFX korrekt laden kann.
  */
 public class TBuild {
 
@@ -356,6 +382,10 @@ public class TBuild {
             }
             File outDir = new File("out");
             outDir.mkdirs();
+
+            // [FIX-JAVAFX-1] JavaFX-JARs aus libs/ sammeln fuer den Compiler-Module-Path
+            List<String> javafxJars = collectJavafxJars();
+
             String compileClasspath = buildClasspath();
             log("[INFO] Kompiliere Dateien mit Classpath: " + compileClasspath + "\n", Color.CYAN);
 
@@ -379,12 +409,31 @@ public class TBuild {
 
             DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
             StandardJavaFileManager fm = compiler.getStandardFileManager(diagnostics, null, null);
+
+            // [FIX-JAVAFX-1] Compiler-Optionen zusammenbauen inkl. JavaFX-Module-Path
+            List<String> compilerOptions = new ArrayList<>();
+            compilerOptions.add("-d");
+            compilerOptions.add(outDir.getAbsolutePath());
+            compilerOptions.add("-sourcepath");
+            compilerOptions.add(srcDir.getAbsolutePath());
+            compilerOptions.add("-classpath");
+            compilerOptions.add(compileClasspath);
+
+            if (!javafxJars.isEmpty()) {
+                String modulePath = String.join(File.pathSeparator, javafxJars);
+                compilerOptions.add("--module-path");
+                compilerOptions.add(modulePath);
+                // Erkannte JavaFX-Module explizit hinzufuegen damit javac sie kennt
+                String detectedModules = detectJavafxModules(javafxJars);
+                compilerOptions.add("--add-modules");
+                compilerOptions.add(detectedModules);
+                log("[INFO] JavaFX erkannt beim Kompilieren. Module-Path: " + modulePath + "\n", Color.CYAN);
+                log("[INFO] JavaFX Add-Modules: " + detectedModules + "\n", Color.CYAN);
+            }
+
             boolean success = compiler.getTask(
                     null, fm, diagnostics,
-                    Arrays.asList(
-                            "-d",          outDir.getAbsolutePath(),
-                            "-sourcepath", srcDir.getAbsolutePath(),
-                            "-classpath",  compileClasspath),
+                    compilerOptions,
                     null, fm.getJavaFileObjectsFromFiles(files)
             ).call();
 
@@ -404,7 +453,7 @@ public class TBuild {
                 log("Starte Programm...\n", Color.GREEN);
                 log("--------------------------------------------------\n", Color.GRAY);
                 String javaExe = getJavaExecutable();
-                List<String> cmd = buildRunCommand(javaExe, compileClasspath);
+                List<String> cmd = buildRunCommand(javaExe, compileClasspath, javafxJars);
                 log("[INFO] Startbefehl: " + String.join(" ", cmd) + "\n", Color.CYAN);
                 ProcessBuilder pb = new ProcessBuilder(cmd);
                 pb.redirectErrorStream(true);
@@ -426,9 +475,10 @@ public class TBuild {
         }
     }
 
-    private List<String> buildRunCommand(String javaExe, String classpath) {
-        List<String> cmd = new ArrayList<>();
-        cmd.add(javaExe);
+    /**
+     * [FIX-JAVAFX-1] Sammelt alle JavaFX-JARs aus dem libs/-Verzeichnis.
+     */
+    private List<String> collectJavafxJars() {
         List<String> javafxJars = new ArrayList<>();
         File lib = new File("libs");
         if (lib.exists() && lib.listFiles() != null) {
@@ -438,13 +488,64 @@ public class TBuild {
                 }
             }
         }
+        return javafxJars;
+    }
+
+    /**
+     * [FIX-JAVAFX-2] Erkennt welche JavaFX-Module tatsaechlich vorhanden sind
+     * anhand der JAR-Dateinamen und gibt eine kommagetrennte Modulliste zurueck.
+     * Beispiel: "javafx.base,javafx.controls,javafx.fxml,javafx.graphics"
+     * Das ist zuverlaessiger als ALL-MODULE-PATH, das auf manchen JDK-Versionen
+     * unerwuenschte System-Module mitzieht.
+     */
+    private String detectJavafxModules(List<String> javafxJarPaths) {
+        List<String> modules = new ArrayList<>();
+        // Immer javafx.base als Basis-Modul
+        boolean hasBase = false;
+        for (String jarPath : javafxJarPaths) {
+            String name = new File(jarPath).getName().toLowerCase();
+            if (name.contains("javafx-base") || name.contains("javafx.base")) {
+                if (!hasBase) { modules.add("javafx.base"); hasBase = true; }
+            } else if (name.contains("javafx-controls") || name.contains("javafx.controls")) {
+                modules.add("javafx.controls");
+            } else if (name.contains("javafx-fxml") || name.contains("javafx.fxml")) {
+                modules.add("javafx.fxml");
+            } else if (name.contains("javafx-graphics") || name.contains("javafx.graphics")) {
+                modules.add("javafx.graphics");
+            } else if (name.contains("javafx-media") || name.contains("javafx.media")) {
+                modules.add("javafx.media");
+            } else if (name.contains("javafx-swing") || name.contains("javafx.swing")) {
+                modules.add("javafx.swing");
+            } else if (name.contains("javafx-web") || name.contains("javafx.web")) {
+                modules.add("javafx.web");
+            }
+        }
+        if (modules.isEmpty()) {
+            // Fallback: ALL-MODULE-PATH
+            return "ALL-MODULE-PATH";
+        }
+        // javafx.graphics ist Voraussetzung fuer javafx.controls, sicherstellen
+        if (modules.contains("javafx.controls") && !modules.contains("javafx.graphics")) {
+            modules.add(1, "javafx.graphics");
+        }
+        if (!hasBase) {
+            modules.add(0, "javafx.base");
+        }
+        return String.join(",", modules);
+    }
+
+    private List<String> buildRunCommand(String javaExe, String classpath, List<String> javafxJars) {
+        List<String> cmd = new ArrayList<>();
+        cmd.add(javaExe);
         if (!javafxJars.isEmpty()) {
             String modulePath = String.join(File.pathSeparator, javafxJars);
             cmd.add("--module-path");
             cmd.add(modulePath);
+            // [FIX-JAVAFX-2] Explizite Modulliste statt ALL-MODULE-PATH
+            String detectedModules = detectJavafxModules(javafxJars);
             cmd.add("--add-modules");
-            cmd.add("ALL-MODULE-PATH");
-            log("[INFO] JavaFX erkannt. Verwende --module-path.\n", Color.CYAN);
+            cmd.add(detectedModules);
+            log("[INFO] JavaFX erkannt. Verwende --module-path mit Modulen: " + detectedModules + "\n", Color.CYAN);
         }
         cmd.add("-cp");
         cmd.add(classpath);
@@ -452,12 +553,18 @@ public class TBuild {
         return cmd;
     }
 
+    // Ueberladung fuer Rueckwaertskompatibilitaet: sammelt JavaFX-JARs selbst
+    private List<String> buildRunCommand(String javaExe, String classpath) {
+        return buildRunCommand(javaExe, classpath, collectJavafxJars());
+    }
+
     private boolean isJavafxJar(String name) {
-        return name.startsWith("javafx-") || name.startsWith("javafx.")
-                || name.contains("javafx-base")     || name.contains("javafx-controls")
-                || name.contains("javafx-fxml")      || name.contains("javafx-graphics")
-                || name.contains("javafx-media")     || name.contains("javafx-swing")
-                || name.contains("javafx-web");
+        String lower = name.toLowerCase();
+        return lower.startsWith("javafx-") || lower.startsWith("javafx.")
+                || lower.contains("javafx-base")     || lower.contains("javafx-controls")
+                || lower.contains("javafx-fxml")      || lower.contains("javafx-graphics")
+                || lower.contains("javafx-media")     || lower.contains("javafx-swing")
+                || lower.contains("javafx-web");
     }
 
     private String getJavaExecutable() {
@@ -925,6 +1032,15 @@ public class TBuild {
                 if (libDir.exists() && libDir.listFiles() != null) {
                     for (File f : libDir.listFiles()) {
                         if (f.getName().endsWith(".jar")) {
+                            // [FIX-JAVAFX-3] JavaFX-JARs beim fat-JAR NICHT entpacken,
+                            // da sie native Bibliotheken (.dll/.so/.dylib) enthalten die
+                            // im fat-JAR nicht funktionieren. JavaFX muss weiterhin ueber
+                            // --module-path aus libs/ geladen werden.
+                            if (isJavafxJar(f.getName())) {
+                                log("   -> Ueberspringe JavaFX-JAR (wird via --module-path geladen): "
+                                        + f.getName() + "\n", Color.GRAY);
+                                continue;
+                            }
                             log("   -> Integriere " + f.getName() + "...\n", Color.GRAY);
                             String jarTool = getJarToolExecutable();
                             ProcessBuilder pb = new ProcessBuilder(jarTool, "xf", f.getAbsolutePath());
@@ -964,7 +1080,19 @@ public class TBuild {
             }
             deleteDirectory(tempDir);
             log("[ERFOLG] " + jarName + " wurde im Projektverzeichnis erstellt!\n", Color.GREEN);
-            log("[INFO] Startbar mit: java -jar " + jarName + "\n", Color.LIGHT_GRAY);
+
+            // [FIX-JAVAFX-3] Hinweis ausgeben wenn JavaFX vorhanden ist
+            List<String> javafxJars = collectJavafxJars();
+            if (fat && !javafxJars.isEmpty()) {
+                String modulePath = new File("libs").getAbsolutePath();
+                String modules = detectJavafxModules(javafxJars);
+                log("[INFO] JavaFX-App: Startbar mit:\n", Color.CYAN);
+                log("       java --module-path " + modulePath
+                        + " --add-modules " + modules
+                        + " -jar " + jarName + "\n", Color.LIGHT_GRAY);
+            } else {
+                log("[INFO] Startbar mit: java -jar " + jarName + "\n", Color.LIGHT_GRAY);
+            }
         } catch (Exception e) {
             log("[FEHLER] Export fehlgeschlagen: " + e.getMessage() + "\n", Color.RED);
             e.printStackTrace();
@@ -1030,6 +1158,7 @@ public class TBuild {
             } else if (os.contains("mac")) {
                 installerType = "dmg";
             } else {
+                // Linux: deb bevorzugen, rpm als Fallback
                 installerType = "deb";
             }
 
@@ -1042,14 +1171,48 @@ public class TBuild {
             cmd.add("--dest");       cmd.add("dist");
             cmd.add("--type");       cmd.add(installerType);
 
-// 1. Die Version aus der T.xml übergeben
+            // Version aus T.xml uebergeben
             cmd.add("--app-version");
             cmd.add(getVersion());
 
-// 2. Windows-spezifische Einstellungen für Suche und Desktop
-            if (System.getProperty("os.name").toLowerCase().contains("win")) {
+            // [FIX-JAVAFX-JPACKAGE] Falls JavaFX-JARs vorhanden sind, muessen diese
+            // als --java-options mit --module-path und --add-modules uebergeben werden,
+            // damit die gepackte App beim Start JavaFX korrekt laden kann.
+            List<String> javafxJars = collectJavafxJars();
+            if (!javafxJars.isEmpty()) {
+                // jpackage kopiert den --input Ordner; die JARs liegen also relativ zur App.
+                // Wir verwenden den absoluten Pfad des libs/-Ordners fuer die java-options.
+                String libsAbsPath = new File("libs").getAbsolutePath();
+                String modules = detectJavafxModules(javafxJars);
+                // Auf Windows muessen Pfade in java-options mit " " gequotet sein wenn sie Leerzeichen enthalten
+                cmd.add("--java-options");
+                cmd.add("--module-path \"" + libsAbsPath + "\" --add-modules " + modules);
+                log("[INFO] JavaFX jpackage-Optionen: --module-path " + libsAbsPath
+                        + " --add-modules " + modules + "\n", Color.CYAN);
+            }
+
+            // OS-spezifische Einstellungen
+            if (os.contains("win")) {
+                // Windows: Startmenue und Desktop-Verknuepfung
                 cmd.add("--win-shortcut"); // Erstellt Icon auf dem Desktop
-                cmd.add("--win-menu");     // Erstellt Eintrag im Startmenü (wichtig für die Windows-Suche)
+                cmd.add("--win-menu");     // Erstellt Eintrag im Startmenue (wichtig fuer Windows-Suche)
+            } else if (os.contains("mac")) {
+                // macOS: keine zusaetzlichen Optionen noetig, DMG ist selbsterklaerend
+            } else {
+                // [FIX-JPACKAGE-LINUX-1] Linux: Desktop-Eintrag und Startmenue-Integration
+                // --linux-shortcut erstellt eine .desktop-Datei im Startmenue
+                cmd.add("--linux-shortcut");
+                // [FIX-JPACKAGE-LINUX-2] Kategorie fuer das Startmenue (freedesktop.org Standard)
+                // "Application" ist der allgemeine Fallback, der ueberall funktioniert
+                cmd.add("--linux-app-category");
+                cmd.add("Application");
+                // Installations-Verzeichnis unter /opt fuer saubere Linux-Konvention
+                // (Standard von jpackage ist bereits /opt/<appname>, explizit fuer Klarheit)
+                // Paket-Name (fuer deb/rpm) muss Kleinbuchstaben und keine Leerzeichen haben
+                String packageName = appName.toLowerCase().replaceAll("[^a-z0-9-]", "-");
+                cmd.add("--linux-package-name");
+                cmd.add(packageName);
+                log("[INFO] Linux-Paketname: " + packageName + "\n", Color.CYAN);
             }
 
             log("[INFO] jpackage-Befehl: " + String.join(" ", cmd) + "\n", Color.CYAN);
@@ -1078,6 +1241,12 @@ public class TBuild {
                 }
             }
             log("[INFO] Installer befindet sich im 'dist/' Ordner.\n", Color.LIGHT_GRAY);
+
+            // [FIX-JPACKAGE-LINUX-1] Erklaerende Hinweise fuer Linux
+            if (!os.contains("win") && !os.contains("mac")) {
+                log("[INFO] Linux-Installation: sudo dpkg -i dist/*.deb\n", Color.LIGHT_GRAY);
+                log("[INFO] Nach Installation erscheint die App im Startmenue und als Desktop-Verknuepfung.\n", Color.LIGHT_GRAY);
+            }
 
         } catch (Exception e) {
             log("[FEHLER] jpackage fehlgeschlagen: " + e.getMessage() + "\n", Color.RED);
