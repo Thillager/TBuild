@@ -160,7 +160,7 @@ public class TBuild {
                 break;
 
             case "build":
-                executeBuild();
+                executeBuild(true);
                 break;
 
             case "export-small":
@@ -174,7 +174,7 @@ public class TBuild {
                 break;
 
             case "build-export-fat":
-                executeBuild();
+                executeBuild(false);
                 executeExport(true);
                 break;
 
@@ -234,7 +234,7 @@ public class TBuild {
         }
         if (needsBuild) {
             log("[INFO] out/ leer oder nicht vorhanden - starte Build...\n", Color.CYAN);
-            executeBuild();
+            executeBuild(false);
         }
     }
 
@@ -266,7 +266,13 @@ public class TBuild {
         versionBtn.addActionListener(e -> setVersionDialog());
         clearBtn.addActionListener(e -> console.setText(""));
         exportJarBtn.addActionListener(e -> exportToJar(false));
-        exportFatBtn.addActionListener(e -> exportToJar(true));
+        exportFatBtn.addActionListener(e -> {
+	    new Thread(() -> {
+	   	executeBuild(false);
+        	exportToJar(true);
+        }).start();
+    });
+
         jpackageBtn.addActionListener(e -> new Thread(() -> {
             executeExport(true);
             executeJPackage();
@@ -369,10 +375,10 @@ public class TBuild {
     // ================== BUILD & RUN ==================
 
     private void runBuild() {
-        new Thread(this::executeBuild).start();
+        new Thread(() -> executeBuild(true)).start();
     }
 
-    private void executeBuild() {
+    private void executeBuild(boolean runAfter) {
         try {
             File srcDir = new File("src/main/java");
             if (!srcDir.exists() || !srcDir.isDirectory()) {
@@ -383,15 +389,12 @@ public class TBuild {
             File outDir = new File("out");
             outDir.mkdirs();
 
-            // [FIX-JAVAFX-1] JavaFX-JARs aus libs/ sammeln fuer den Compiler-Module-Path
             List<String> javafxJars = collectJavafxJars();
-
             String compileClasspath = buildClasspath();
-            log("[INFO] Kompiliere Dateien mit Classpath: " + compileClasspath + "\n", Color.CYAN);
-
+            
             JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
             if (compiler == null) {
-                log("[FEHLER] Kein Java Compiler gefunden. Laeuft das Programm mit einem JDK?\n", Color.RED);
+                log("[FEHLER] Kein Java Compiler gefunden.\n", Color.RED);
                 if (isCliMode) System.exit(1);
                 return;
             }
@@ -399,49 +402,31 @@ public class TBuild {
             List<File> files = new ArrayList<>();
             Files.walk(srcDir.toPath())
                     .filter(p -> p.toString().endsWith(".java"))
-                    .forEach(p -> files.add(p.toFile()));
+                    .forEach(path -> files.add(path.toFile()));
 
             if (files.isEmpty()) {
                 log("[FEHLER] Keine .java Dateien gefunden.\n", Color.RED);
-                if (isCliMode) System.exit(1);
                 return;
             }
 
             DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
             StandardJavaFileManager fm = compiler.getStandardFileManager(diagnostics, null, null);
 
-            // [FIX-JAVAFX-1] Compiler-Optionen zusammenbauen inkl. JavaFX-Module-Path
-            List<String> compilerOptions = new ArrayList<>();
-            compilerOptions.add("-d");
-            compilerOptions.add(outDir.getAbsolutePath());
-            compilerOptions.add("-sourcepath");
-            compilerOptions.add(srcDir.getAbsolutePath());
-            compilerOptions.add("-classpath");
-            compilerOptions.add(compileClasspath);
+            List<String> compilerOptions = new ArrayList<>(Arrays.asList("-d", outDir.getAbsolutePath(), "-sourcepath", srcDir.getAbsolutePath(), "-classpath", compileClasspath, "-encoding", "UTF-8"));
 
             if (!javafxJars.isEmpty()) {
-                String modulePath = String.join(File.pathSeparator, javafxJars);
                 compilerOptions.add("--module-path");
-                compilerOptions.add(modulePath);
-                // Erkannte JavaFX-Module explizit hinzufuegen damit javac sie kennt
-                String detectedModules = detectJavafxModules(javafxJars);
+                compilerOptions.add(String.join(File.pathSeparator, javafxJars));
                 compilerOptions.add("--add-modules");
-                compilerOptions.add(detectedModules);
-                log("[INFO] JavaFX erkannt beim Kompilieren. Module-Path: " + modulePath + "\n", Color.CYAN);
-                log("[INFO] JavaFX Add-Modules: " + detectedModules + "\n", Color.CYAN);
+                compilerOptions.add(detectJavafxModules(javafxJars));
             }
 
-            boolean success = compiler.getTask(
-                    null, fm, diagnostics,
-                    compilerOptions,
-                    null, fm.getJavaFileObjectsFromFiles(files)
-            ).call();
+            boolean success = compiler.getTask(null, fm, diagnostics, compilerOptions, null, fm.getJavaFileObjectsFromFiles(files)).call();
 
             if (!success) {
                 log("[FEHLER] Kompilierung fehlgeschlagen:\n", Color.RED);
-                for (Diagnostic<?> diagnostic : diagnostics.getDiagnostics()) {
-                    log(" - Zeile " + diagnostic.getLineNumber() + ": "
-                            + diagnostic.getMessage(null) + "\n", Color.ORANGE);
+                for (Diagnostic<?> d : diagnostics.getDiagnostics()) {
+                    log(" - Zeile " + d.getLineNumber() + ": " + d.getMessage(null) + "\n", Color.ORANGE);
                 }
                 if (isCliMode) System.exit(1);
                 return;
@@ -449,28 +434,27 @@ public class TBuild {
 
             log("[ERFOLG] Erfolgreich kompiliert.\n", Color.GREEN);
 
-            if (!isCliMode) {
+            // Der Teil, der dich interessiert: Nur starten, wenn explizit erwünscht
+            if (runAfter && !isCliMode) {
                 log("Starte Programm...\n", Color.GREEN);
                 log("--------------------------------------------------\n", Color.GRAY);
                 String javaExe = getJavaExecutable();
                 List<String> cmd = buildRunCommand(javaExe, compileClasspath, javafxJars);
-                log("[INFO] Startbefehl: " + String.join(" ", cmd) + "\n", Color.CYAN);
+                
                 ProcessBuilder pb = new ProcessBuilder(cmd);
                 pb.redirectErrorStream(true);
-                Process p = pb.start();
-                BufferedReader r = new BufferedReader(new InputStreamReader(p.getInputStream()));
-                String line;
-                while ((line = r.readLine()) != null) {
-                    log(line + "\n", Color.WHITE);
-                }
+                Process p = pb.start(); // Hier wird 'p' definiert
+                
+                // Output konsumieren damit es nicht hängt
+                Thread drain = drainAsync(p.getInputStream());
                 int exitCode = p.waitFor();
+                drain.join();
+                
                 log("--------------------------------------------------\n", Color.GRAY);
-                log("[INFO] Programm beendet mit Exit-Code: " + exitCode + "\n",
-                        exitCode == 0 ? Color.LIGHT_GRAY : Color.ORANGE);
+                log("[INFO] Programm beendet mit Exit-Code: " + exitCode + "\n", exitCode == 0 ? Color.LIGHT_GRAY : Color.ORANGE);
             }
         } catch (Exception e) {
             log("[FEHLER] Build-Prozess abgestuerzt: " + e.getMessage() + "\n", Color.RED);
-            e.printStackTrace();
             if (isCliMode) System.exit(1);
         }
     }
