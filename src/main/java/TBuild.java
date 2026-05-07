@@ -1,7 +1,6 @@
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
-import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Toolkit;
 import java.io.BufferedReader;
@@ -64,52 +63,38 @@ import org.w3c.dom.NodeList;
 /**
  * T-build
  *
- * Bugfixes in dieser Version:
+ * Bugfixes und Aenderungen in dieser Version:
  *
  * [FIX-WIN-1] WINDOWS HANG in executeExport(): jar-Prozesse (xf, cfe) haben
- *   auf Windows volle stderr/stdout-Puffer (Manifest-Warnungen, Duplikat-
- *   Warnungen, Signaturwarnungen etc.). Der Puffer blockiert den Prozess bevor
- *   waitFor() zurueckkehrt. Fix: Output wird in einem dedizierten Daemon-Thread
- *   parallel konsumiert. drainAsync() startet diesen Thread und gibt ihn zurueck,
- *   sodass waitFor() nie blockiert.
+ *   auf Windows volle stderr/stdout-Puffer. Fix: drainAsync() liest parallel.
  *
  * [FIX-WIN-2] Relativer Pfad "../Export-Fat.jar" in jar-cfe-Befehl funktioniert
- *   auf Windows nicht zuverlaessig wenn pb.directory() auf ein temp-Unterverzeichnis
- *   gesetzt ist. Fix: Absoluter Pfad des Ziels wird immer verwendet.
+ *   auf Windows nicht zuverlaessig. Fix: Absoluter Pfad wird immer verwendet.
  *
- * [FIX-CLI-1] System.exit(0) am Ende von runCli() damit kein verbleibender
- *   nicht-Daemon-Thread den Prozess auf Windows haengen laesst.
+ * [FIX-CLI-1] System.exit(0) am Ende von runCli().
  *
  * [FIX-CLI-2] downloadAllBlocking() wartet mit Timeout auf Pool-Shutdown.
- *   Bei Fehler wird shutdownNow() aufgerufen damit keine Threads haengen bleiben.
  *
- * [FIX-JAVAFX-1] JavaFX-Module werden nun auch beim Kompilieren korrekt als
- *   --module-path uebergeben, nicht nur beim Ausfuehren. Ohne --module-path
- *   beim javac-Aufruf schlaegt die Kompilierung fehl, weil javafx.* Pakete
- *   nicht im normalen Classpath sichtbar sind.
+ * [FIX-JAVAFX-1] JavaFX-Module werden beim Kompilieren als --module-path uebergeben.
  *
- * [FIX-JAVAFX-2] Beim Starten wird jetzt explizit geprueft welche JavaFX-Module
- *   tatsaechlich im module-path vorhanden sind und nur diese werden in
- *   --add-modules uebergeben (statt ALL-MODULE-PATH, das auf manchen JDKs
- *   Probleme macht). Ausserdem wird javafx.base immer als Mindestmodul gesetzt.
+ * [FIX-JAVAFX-2] Explizite JavaFX-Modulliste statt ALL-MODULE-PATH.
  *
- * [FIX-JAVAFX-3] JavaFX-JARs werden beim fat-JAR-Export ausgeschlossen, da
- *   JavaFX native Bibliotheken enthaelt die nicht gepackt werden koennen.
- *   Stattdessen wird beim Starten des fat-JARs der --module-path auf libs/
- *   gesetzt damit JavaFX korrekt geladen wird.
+ * [FIX-JAVAFX-3] JavaFX-JARs beim fat-JAR-Export ausgeschlossen.
  *
- * [FIX-JPACKAGE-LINUX-1] Unter Linux werden jetzt --linux-shortcut und
- *   --linux-menu-group gesetzt, damit der Installer einen Desktop-Eintrag
- *   (im Startmenue) und eine Desktop-Verknuepfung erstellt.
+ * [FIX-JPACKAGE-LINUX-1] --linux-shortcut und --linux-menu-group gesetzt.
  *
- * [FIX-JPACKAGE-LINUX-2] Unter Linux wird --linux-app-category gesetzt damit
- *   der Eintrag korrekt kategorisiert wird.
+ * [FIX-JPACKAGE-LINUX-2] --linux-app-category gesetzt.
  *
- * [FIX-JPACKAGE-JAVAFX] Falls JavaFX-JARs vorhanden sind, wird --java-options
- *   mit dem korrekten --module-path und --add-modules fuer jpackage erzeugt,
- *   damit die gepackte App JavaFX korrekt laden kann.
+ * [FIX-JPACKAGE-JAVAFX] --java-options mit --module-path fuer jpackage.
+ *
+ * [NEW-MSI] Windows-Installer wird jetzt als .msi statt .exe erstellt.
+ *   --win-upgrade-uuid ist fest gesetzt fuer saubere MSI-Updates.
  */
 public class TBuild {
+
+    // Feste UUID fuer MSI-Upgrades - NICHT aendern, sonst erkennt Windows
+    // das Update nicht als Upgrade und installiert doppelt!
+    private static final String WIN_UPGRADE_UUID = "a1b2c3d4-e5f6-7890-abcd-ef1234567890";
 
     private JFrame frame;
     private JTextPane console;
@@ -127,12 +112,6 @@ public class TBuild {
 
     public static void main(String[] args) {
         if (args.length > 0) {
-            // CLI-Modus: AWT/Swing komplett deaktivieren BEVOR irgendeine AWT-Klasse
-            // initialisiert wird. Auf headless Linux-Servern (kein X11/Display, wie
-            // GitHub Actions) wuerde sonst die AWT-EventQueue starten und mit
-            // HeadlessException abstuerzen, auch wenn --return-- den main-Thread stoppt.
-            // Das Property muss als allererstes gesetzt werden, bevor der Classloader
-            // AWT initialisiert.
             System.setProperty("java.awt.headless", "true");
             new TBuild().runCli(args);
             return;
@@ -158,32 +137,26 @@ public class TBuild {
             case "init":
                 initProject();
                 break;
-
             case "build":
                 executeBuild(true);
                 break;
-
             case "export-small":
                 ensureBuilt();
                 executeExport(false);
                 break;
-
             case "export":
                 ensureBuilt();
                 executeExport(true);
                 break;
-
             case "build-export-fat":
                 executeBuild(false);
                 executeExport(true);
                 break;
-
             case "jpackage":
                 ensureBuilt();
                 executeExport(true);
                 executeJPackage();
                 break;
-
             case "set-main":
                 if (args.length > 1) {
                     saveConfig(args[1], getAppName(), getVersion());
@@ -193,7 +166,6 @@ public class TBuild {
                     System.exit(1);
                 }
                 break;
-
             case "set-version":
                 if (args.length > 1) {
                     saveConfig(getMainClass(), getAppName(), args[1]);
@@ -203,22 +175,19 @@ public class TBuild {
                     System.exit(1);
                 }
                 break;
-
             default:
                 System.out.println("Unbekannter Befehl: " + command);
                 System.out.println("Verfuegbare Befehle:");
                 System.out.println("  init              - Initialisiert das Projekt");
                 System.out.println("  build             - Kompiliert das Projekt");
-                System.out.println("  export-small       - Erstellt eine .jar (ohne Abhaengigkeiten)");
+                System.out.println("  export-small      - Erstellt eine .jar (ohne Abhaengigkeiten)");
                 System.out.println("  export            - Erstellt eine .jar (inkl. Abhaengigkeiten)");
                 System.out.println("  build-export-fat  - Build + Fat-Export in einem Schritt (fuer CI/CD)");
-                System.out.println("  jpackage          - Erstellt nativen Installer via jpackage");
-                System.out.println("  set-main <klasse> - Setzt die Main-Klasse (z.B. set-main de.pkg.Main)");
+                System.out.println("  jpackage          - Erstellt nativen Installer (.msi/.deb)");
+                System.out.println("  set-main <klasse> - Setzt die Main-Klasse");
+                System.out.println("  set-version <v>   - Setzt die Version");
                 System.exit(1);
         }
-
-        // [FIX-CLI-1] Expliziter Exit damit keine verbleibenden Non-Daemon-Threads
-        // den Prozess auf Windows haengen lassen.
         System.exit(0);
     }
 
@@ -229,8 +198,7 @@ public class TBuild {
             try {
                 needsBuild = !Files.walk(outDir.toPath())
                         .anyMatch(p -> p.toString().endsWith(".class"));
-            } catch (IOException ignored) {
-            }
+            } catch (IOException ignored) {}
         }
         if (needsBuild) {
             log("[INFO] out/ leer oder nicht vorhanden - starte Build...\n", Color.CYAN);
@@ -242,7 +210,9 @@ public class TBuild {
 
     private void createUI() {
         frame = new JFrame("T-build - Simple Java Build Tool");
-        frame.setExtendedState(JFrame.MAXIMIZED_BOTH);
+        Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+        frame.setSize(screen.width / 2, screen.height / 2);
+        frame.setLocation(0, 0);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         JPanel root = new JPanel(new BorderLayout(10, 10));
         root.setBorder(new EmptyBorder(10, 10, 10, 10));
@@ -266,18 +236,15 @@ public class TBuild {
         versionBtn.addActionListener(e -> setVersionDialog());
         clearBtn.addActionListener(e -> console.setText(""));
         exportJarBtn.addActionListener(e -> exportToJar(false));
-        exportFatBtn.addActionListener(e -> {
-	    new Thread(() -> {
-	   	executeBuild(false);
-        	exportToJar(true);
-        }).start();
-    });
-
+        exportFatBtn.addActionListener(e -> new Thread(() -> {
+            executeBuild(false);
+            exportToJar(true);
+        }).start());
         jpackageBtn.addActionListener(e -> new Thread(() -> {
             executeExport(true);
             executeJPackage();
         }).start());
-        nameBtn.addActionListener(e-> setName());
+        nameBtn.addActionListener(e -> setName());
 
         top.add(initBtn);
         top.add(buildBtn);
@@ -341,8 +308,7 @@ public class TBuild {
             try {
                 doc.insertString(doc.getLength(), msg, style);
                 console.setCaretPosition(doc.getLength());
-            } catch (Exception ignored) {
-            }
+            } catch (Exception ignored) {}
         });
     }
 
@@ -362,7 +328,8 @@ public class TBuild {
                     pw.println("        System.out.println(\"Hallo Welt von T-build!\");");
                     pw.println("    }");
                     pw.println("}");
-                } saveConfig("Main", "MeinProjekt", "1.0.0");
+                }
+                saveConfig("Main", "MeinProjekt", "1.0.0");
                 log("[ERFOLG] Projektstruktur und Main.java erstellt.\n", Color.GREEN);
             } else {
                 log("[INFO] Projektstruktur existiert bereits.\n", Color.LIGHT_GRAY);
@@ -391,7 +358,7 @@ public class TBuild {
 
             List<String> javafxJars = collectJavafxJars();
             String compileClasspath = buildClasspath();
-            
+
             JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
             if (compiler == null) {
                 log("[FEHLER] Kein Java Compiler gefunden.\n", Color.RED);
@@ -412,7 +379,11 @@ public class TBuild {
             DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
             StandardJavaFileManager fm = compiler.getStandardFileManager(diagnostics, null, null);
 
-            List<String> compilerOptions = new ArrayList<>(Arrays.asList("-d", outDir.getAbsolutePath(), "-sourcepath", srcDir.getAbsolutePath(), "-classpath", compileClasspath, "-encoding", "UTF-8"));
+            List<String> compilerOptions = new ArrayList<>(Arrays.asList(
+                    "-d", outDir.getAbsolutePath(),
+                    "-sourcepath", srcDir.getAbsolutePath(),
+                    "-classpath", compileClasspath,
+                    "-encoding", "UTF-8"));
 
             if (!javafxJars.isEmpty()) {
                 compilerOptions.add("--module-path");
@@ -421,7 +392,8 @@ public class TBuild {
                 compilerOptions.add(detectJavafxModules(javafxJars));
             }
 
-            boolean success = compiler.getTask(null, fm, diagnostics, compilerOptions, null, fm.getJavaFileObjectsFromFiles(files)).call();
+            boolean success = compiler.getTask(null, fm, diagnostics, compilerOptions, null,
+                    fm.getJavaFileObjectsFromFiles(files)).call();
 
             if (!success) {
                 log("[FEHLER] Kompilierung fehlgeschlagen:\n", Color.RED);
@@ -434,24 +406,20 @@ public class TBuild {
 
             log("[ERFOLG] Erfolgreich kompiliert.\n", Color.GREEN);
 
-            // Der Teil, der dich interessiert: Nur starten, wenn explizit erwünscht
             if (runAfter && !isCliMode) {
                 log("Starte Programm...\n", Color.GREEN);
                 log("--------------------------------------------------\n", Color.GRAY);
                 String javaExe = getJavaExecutable();
                 List<String> cmd = buildRunCommand(javaExe, compileClasspath, javafxJars);
-                
                 ProcessBuilder pb = new ProcessBuilder(cmd);
                 pb.redirectErrorStream(true);
-                Process p = pb.start(); // Hier wird 'p' definiert
-                
-                // Output konsumieren damit es nicht hängt
+                Process p = pb.start();
                 Thread drain = drainAsync(p.getInputStream());
                 int exitCode = p.waitFor();
                 drain.join();
-                
                 log("--------------------------------------------------\n", Color.GRAY);
-                log("[INFO] Programm beendet mit Exit-Code: " + exitCode + "\n", exitCode == 0 ? Color.LIGHT_GRAY : Color.ORANGE);
+                log("[INFO] Programm beendet mit Exit-Code: " + exitCode + "\n",
+                        exitCode == 0 ? Color.LIGHT_GRAY : Color.ORANGE);
             }
         } catch (Exception e) {
             log("[FEHLER] Build-Prozess abgestuerzt: " + e.getMessage() + "\n", Color.RED);
@@ -459,9 +427,6 @@ public class TBuild {
         }
     }
 
-    /**
-     * [FIX-JAVAFX-1] Sammelt alle JavaFX-JARs aus dem libs/-Verzeichnis.
-     */
     private List<String> collectJavafxJars() {
         List<String> javafxJars = new ArrayList<>();
         File lib = new File("libs");
@@ -475,16 +440,8 @@ public class TBuild {
         return javafxJars;
     }
 
-    /**
-     * [FIX-JAVAFX-2] Erkennt welche JavaFX-Module tatsaechlich vorhanden sind
-     * anhand der JAR-Dateinamen und gibt eine kommagetrennte Modulliste zurueck.
-     * Beispiel: "javafx.base,javafx.controls,javafx.fxml,javafx.graphics"
-     * Das ist zuverlaessiger als ALL-MODULE-PATH, das auf manchen JDK-Versionen
-     * unerwuenschte System-Module mitzieht.
-     */
     private String detectJavafxModules(List<String> javafxJarPaths) {
         List<String> modules = new ArrayList<>();
-        // Immer javafx.base als Basis-Modul
         boolean hasBase = false;
         for (String jarPath : javafxJarPaths) {
             String name = new File(jarPath).getName().toLowerCase();
@@ -504,17 +461,11 @@ public class TBuild {
                 modules.add("javafx.web");
             }
         }
-        if (modules.isEmpty()) {
-            // Fallback: ALL-MODULE-PATH
-            return "ALL-MODULE-PATH";
-        }
-        // javafx.graphics ist Voraussetzung fuer javafx.controls, sicherstellen
+        if (modules.isEmpty()) return "ALL-MODULE-PATH";
         if (modules.contains("javafx.controls") && !modules.contains("javafx.graphics")) {
             modules.add(1, "javafx.graphics");
         }
-        if (!hasBase) {
-            modules.add(0, "javafx.base");
-        }
+        if (!hasBase) modules.add(0, "javafx.base");
         return String.join(",", modules);
     }
 
@@ -525,11 +476,10 @@ public class TBuild {
             String modulePath = String.join(File.pathSeparator, javafxJars);
             cmd.add("--module-path");
             cmd.add(modulePath);
-            // [FIX-JAVAFX-2] Explizite Modulliste statt ALL-MODULE-PATH
             String detectedModules = detectJavafxModules(javafxJars);
             cmd.add("--add-modules");
             cmd.add(detectedModules);
-            log("[INFO] JavaFX erkannt. Verwende --module-path mit Modulen: " + detectedModules + "\n", Color.CYAN);
+            log("[INFO] JavaFX erkannt. Module: " + detectedModules + "\n", Color.CYAN);
         }
         cmd.add("-cp");
         cmd.add(classpath);
@@ -537,7 +487,6 @@ public class TBuild {
         return cmd;
     }
 
-    // Ueberladung fuer Rueckwaertskompatibilitaet: sammelt JavaFX-JARs selbst
     private List<String> buildRunCommand(String javaExe, String classpath) {
         return buildRunCommand(javaExe, classpath, collectJavafxJars());
     }
@@ -545,9 +494,9 @@ public class TBuild {
     private boolean isJavafxJar(String name) {
         String lower = name.toLowerCase();
         return lower.startsWith("javafx-") || lower.startsWith("javafx.")
-                || lower.contains("javafx-base")     || lower.contains("javafx-controls")
-                || lower.contains("javafx-fxml")      || lower.contains("javafx-graphics")
-                || lower.contains("javafx-media")     || lower.contains("javafx-swing")
+                || lower.contains("javafx-base")    || lower.contains("javafx-controls")
+                || lower.contains("javafx-fxml")     || lower.contains("javafx-graphics")
+                || lower.contains("javafx-media")    || lower.contains("javafx-swing")
                 || lower.contains("javafx-web");
     }
 
@@ -609,9 +558,7 @@ public class TBuild {
             if (!f.exists()) return "Main";
             Document doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(f);
             return doc.getElementsByTagName("mainClass").item(0).getTextContent();
-        } catch (Exception e) {
-            return "Main";
-        }
+        } catch (Exception e) { return "Main"; }
     }
 
     private String getVersion() {
@@ -634,8 +581,7 @@ public class TBuild {
             if (nl.getLength() > 0 && !nl.item(0).getTextContent().trim().isEmpty()) {
                 return nl.item(0).getTextContent().trim();
             }
-        } catch (Exception ignored) {
-        }
+        } catch (Exception ignored) {}
         return deriveAppName();
     }
 
@@ -708,9 +654,7 @@ public class TBuild {
                             frame, "Version waehlen fuer " + p[1] + ":",
                             "Versionsauswahl", JOptionPane.PLAIN_MESSAGE,
                             null, versions.toArray(), versions.get(0));
-                    if (choice != null) {
-                        downloadAll(p[0], p[1], choice);
-                    }
+                    if (choice != null) downloadAll(p[0], p[1], choice);
                 });
             } catch (Exception e) {
                 log("[FEHLER] Konnte Versionen nicht laden: " + e.getMessage() + "\n", Color.RED);
@@ -725,9 +669,7 @@ public class TBuild {
         conn.setConnectTimeout(8000);
         conn.setReadTimeout(8000);
         int responseCode = conn.getResponseCode();
-        if (responseCode != 200) {
-            throw new IOException("HTTP Error " + responseCode + " fuer URL: " + urlStr);
-        }
+        if (responseCode != 200) throw new IOException("HTTP Error " + responseCode);
         try (BufferedReader r = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
             StringBuilder sb = new StringBuilder();
             String line;
@@ -739,11 +681,8 @@ public class TBuild {
     // ================== DEPENDENCY DOWNLOAD ==================
 
     private void downloadAll(String groupId, String artifactId, String version) {
-        if (isCliMode) {
-            downloadAllBlocking(groupId, artifactId, version);
-        } else {
-            new Thread(() -> downloadAllBlocking(groupId, artifactId, version)).start();
-        }
+        if (isCliMode) downloadAllBlocking(groupId, artifactId, version);
+        else new Thread(() -> downloadAllBlocking(groupId, artifactId, version)).start();
     }
 
     private void downloadAllBlocking(String groupId, String artifactId, String version) {
@@ -755,17 +694,12 @@ public class TBuild {
             activeDownloadTasks.set(0);
             log("[INFO] Starte Aufloesung von " + artifactId + ":" + version + "...\n", Color.CYAN);
             resolve(groupId, artifactId, version);
-            while (activeDownloadTasks.get() > 0) {
-                Thread.sleep(250);
-            }
+            while (activeDownloadTasks.get() > 0) Thread.sleep(250);
             pool.shutdown();
-            // [FIX-CLI-2] Timeout + shutdownNow() falls ein Thread haengt
-            if (!pool.awaitTermination(5, TimeUnit.MINUTES)) {
-                pool.shutdownNow();
-            }
+            if (!pool.awaitTermination(5, TimeUnit.MINUTES)) pool.shutdownNow();
             log("[ERFOLG] Alle Dependencies wurden geladen.\n", Color.GREEN);
         } catch (Exception e) {
-            log("[FEHLER] Kritischer Fehler beim Download-Prozess: " + e.getMessage() + "\n", Color.RED);
+            log("[FEHLER] Kritischer Fehler: " + e.getMessage() + "\n", Color.RED);
             if (pool != null && !pool.isShutdown()) pool.shutdownNow();
         }
     }
@@ -773,8 +707,7 @@ public class TBuild {
     private void resolve(String g, String a, String v) {
         if (g == null || a == null || v == null) return;
         if (v.startsWith("${")) {
-            log("[WARNUNG] Konnte Version fuer " + g + ":" + a
-                    + " nicht aufloesen (Property: " + v + "). Ueberspringe.\n", Color.ORANGE);
+            log("[WARNUNG] Konnte Version fuer " + g + ":" + a + " nicht aufloesen.\n", Color.ORANGE);
             return;
         }
         String key = g + ":" + a + ":" + v;
@@ -785,21 +718,17 @@ public class TBuild {
                 if (downloadPom(g, a, v)) {
                     PomData data = parsePom(g, a, v);
                     if (data != null) {
-                        if (!"pom".equalsIgnoreCase(data.packaging)) {
-                            downloadJar(g, a, v);
-                        }
+                        if (!"pom".equalsIgnoreCase(data.packaging)) downloadJar(g, a, v);
                         for (Dependency dep : data.dependencies) {
                             String scope = dep.scope;
-                            if ("test".equals(scope) || "provided".equals(scope)
-                                    || "system".equals(scope)) continue;
+                            if ("test".equals(scope) || "provided".equals(scope) || "system".equals(scope)) continue;
                             if (dep.optional) continue;
                             resolve(dep.groupId, dep.artifactId, dep.version);
                         }
                     }
                 }
             } catch (Exception e) {
-                log("[WARNUNG] Konnte " + key + " nicht vollstaendig laden: "
-                        + e.getMessage() + "\n", Color.ORANGE);
+                log("[WARNUNG] Konnte " + key + " nicht laden: " + e.getMessage() + "\n", Color.ORANGE);
             } finally {
                 activeDownloadTasks.decrementAndGet();
             }
@@ -815,7 +744,7 @@ public class TBuild {
         try {
             doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(pomFile);
         } catch (Exception e) {
-            log("[WARNUNG] POM-Datei konnte nicht geparst werden: " + pomFile.getName() + "\n", Color.ORANGE);
+            log("[WARNUNG] POM konnte nicht geparst werden: " + pomFile.getName() + "\n", Color.ORANGE);
             return null;
         }
         org.w3c.dom.Element root = doc.getDocumentElement();
@@ -867,16 +796,13 @@ public class TBuild {
                 NodeList deps = depsEl2.getChildNodes();
                 for (int i = 0; i < deps.getLength(); i++) {
                     Node node = deps.item(i);
-                    if (node.getNodeType() == Node.ELEMENT_NODE
-                            && node.getNodeName().equals("dependency")) {
+                    if (node.getNodeType() == Node.ELEMENT_NODE && node.getNodeName().equals("dependency")) {
                         org.w3c.dom.Element e = (org.w3c.dom.Element) node;
                         String dg = resolveProperty(getTag(e, "groupId"),    data.properties);
                         String da = resolveProperty(getTag(e, "artifactId"), data.properties);
                         String dv = resolveProperty(getTag(e, "version"),    data.properties);
                         String ds = resolveProperty(getTag(e, "scope"),      data.properties);
-                        if ("import".equals(ds)
-                                && "pom".equalsIgnoreCase(
-                                resolveProperty(getTag(e, "type"), data.properties))) {
+                        if ("import".equals(ds) && "pom".equalsIgnoreCase(resolveProperty(getTag(e, "type"), data.properties))) {
                             if (dg != null && da != null && dv != null && !dv.startsWith("${")) {
                                 downloadPom(dg, da, dv);
                                 PomData bomData = parsePom(dg, da, dv);
@@ -899,30 +825,25 @@ public class TBuild {
             NodeList deps = depsEl.getChildNodes();
             for (int i = 0; i < deps.getLength(); i++) {
                 Node node = deps.item(i);
-                if (node.getNodeType() == Node.ELEMENT_NODE
-                        && node.getNodeName().equals("dependency")) {
+                if (node.getNodeType() == Node.ELEMENT_NODE && node.getNodeName().equals("dependency")) {
                     org.w3c.dom.Element e = (org.w3c.dom.Element) node;
                     Dependency dep = new Dependency();
                     dep.groupId    = resolveProperty(getTag(e, "groupId"),    data.properties);
                     dep.artifactId = resolveProperty(getTag(e, "artifactId"), data.properties);
                     dep.version    = resolveProperty(getTag(e, "version"),    data.properties);
                     dep.scope      = resolveProperty(getTag(e, "scope"),      data.properties);
-                    dep.optional   = "true".equalsIgnoreCase(
-                            resolveProperty(getTag(e, "optional"), data.properties));
-                    if ((dep.version == null || dep.version.startsWith("${"))
-                            && dep.groupId != null && dep.artifactId != null) {
+                    dep.optional   = "true".equalsIgnoreCase(resolveProperty(getTag(e, "optional"), data.properties));
+                    if ((dep.version == null || dep.version.startsWith("${")) && dep.groupId != null && dep.artifactId != null) {
                         String managed = data.managedVersions.get(dep.groupId + ":" + dep.artifactId);
                         if (managed != null && !managed.startsWith("${")) dep.version = managed;
                     }
                     if (dep.version != null && dep.version.startsWith("${")) {
                         dep.version = resolveProperty(dep.version, data.properties);
                     }
-                    if (dep.groupId != null && dep.artifactId != null
-                            && dep.version != null && !dep.version.startsWith("${")) {
+                    if (dep.groupId != null && dep.artifactId != null && dep.version != null && !dep.version.startsWith("${")) {
                         data.dependencies.add(dep);
                     } else if (dep.groupId != null && dep.artifactId != null) {
-                        log("[WARNUNG] Konnte Version fuer " + dep.groupId + ":"
-                                + dep.artifactId + " nicht aufloesen. Ueberspringe.\n", Color.ORANGE);
+                        log("[WARNUNG] Konnte Version fuer " + dep.groupId + ":" + dep.artifactId + " nicht aufloesen.\n", Color.ORANGE);
                     }
                 }
             }
@@ -941,7 +862,7 @@ public class TBuild {
         if (!pomDownloadStarted.add(key)) {
             for (int i = 0; i < 40; i++) {
                 if (targetFile.exists() && targetFile.length() > 0) return true;
-                try { Thread.sleep(250); } catch (InterruptedException ignored) { }
+                try { Thread.sleep(250); } catch (InterruptedException ignored) {}
             }
             return targetFile.exists() && targetFile.length() > 0;
         }
@@ -978,11 +899,10 @@ public class TBuild {
             try (InputStream in = conn.getInputStream()) {
                 Files.copy(in, tempPath, StandardCopyOption.REPLACE_EXISTING);
             }
-            Files.move(tempPath, Paths.get(target),
-                    StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            Files.move(tempPath, Paths.get(target), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
             return true;
         } catch (Exception e) {
-            try { Files.deleteIfExists(Paths.get(target + ".tmp")); } catch (IOException ignored) { }
+            try { Files.deleteIfExists(Paths.get(target + ".tmp")); } catch (IOException ignored) {}
             return false;
         }
     }
@@ -1016,13 +936,8 @@ public class TBuild {
                 if (libDir.exists() && libDir.listFiles() != null) {
                     for (File f : libDir.listFiles()) {
                         if (f.getName().endsWith(".jar")) {
-                            // [FIX-JAVAFX-3] JavaFX-JARs beim fat-JAR NICHT entpacken,
-                            // da sie native Bibliotheken (.dll/.so/.dylib) enthalten die
-                            // im fat-JAR nicht funktionieren. JavaFX muss weiterhin ueber
-                            // --module-path aus libs/ geladen werden.
                             if (isJavafxJar(f.getName())) {
-                                log("   -> Ueberspringe JavaFX-JAR (wird via --module-path geladen): "
-                                        + f.getName() + "\n", Color.GRAY);
+                                log("   -> Ueberspringe JavaFX-JAR: " + f.getName() + "\n", Color.GRAY);
                                 continue;
                             }
                             log("   -> Integriere " + f.getName() + "...\n", Color.GRAY);
@@ -1031,8 +946,6 @@ public class TBuild {
                             pb.directory(tempDir);
                             pb.redirectErrorStream(true);
                             Process proc = pb.start();
-                            // [FIX-WIN-1] Output parallel konsumieren damit der Prozess-Puffer
-                            // nicht voll wird und den Prozess auf Windows nicht blockiert.
                             Thread drainThread = drainAsync(proc.getInputStream());
                             proc.waitFor();
                             drainThread.join();
@@ -1045,14 +958,11 @@ public class TBuild {
             log("[INFO] Packe finale Datei...\n", Color.CYAN);
 
             String jarTool = getJarToolExecutable();
-            // [FIX-WIN-2] Absoluter Pfad fuer das Ziel-JAR statt relativem "../jarName".
-            // Relativer Pfad funktioniert auf Windows nicht wenn pb.directory() gesetzt ist.
             String jarTarget = new File(jarName).getAbsolutePath();
             ProcessBuilder pb = new ProcessBuilder(jarTool, "cfe", jarTarget, mainClass, ".");
             pb.directory(tempDir);
             pb.redirectErrorStream(true);
             Process proc = pb.start();
-            // [FIX-WIN-1] Auch hier parallel drainieren
             Thread drainThread = drainAsync(proc.getInputStream());
             int exitCode = proc.waitFor();
             drainThread.join();
@@ -1063,45 +973,29 @@ public class TBuild {
                 return;
             }
             deleteDirectory(tempDir);
-            log("[ERFOLG] " + jarName + " wurde im Projektverzeichnis erstellt!\n", Color.GREEN);
+            log("[ERFOLG] " + jarName + " wurde erstellt!\n", Color.GREEN);
 
-            // [FIX-JAVAFX-3] Hinweis ausgeben wenn JavaFX vorhanden ist
             List<String> javafxJars = collectJavafxJars();
             if (fat && !javafxJars.isEmpty()) {
                 String modulePath = new File("libs").getAbsolutePath();
                 String modules = detectJavafxModules(javafxJars);
-                log("[INFO] JavaFX-App: Startbar mit:\n", Color.CYAN);
-                log("       java --module-path " + modulePath
-                        + " --add-modules " + modules
-                        + " -jar " + jarName + "\n", Color.LIGHT_GRAY);
+                log("[INFO] JavaFX-App starten mit:\n", Color.CYAN);
+                log("       java --module-path " + modulePath + " --add-modules " + modules + " -jar " + jarName + "\n", Color.LIGHT_GRAY);
             } else {
                 log("[INFO] Startbar mit: java -jar " + jarName + "\n", Color.LIGHT_GRAY);
             }
         } catch (Exception e) {
             log("[FEHLER] Export fehlgeschlagen: " + e.getMessage() + "\n", Color.RED);
-            e.printStackTrace();
             if (isCliMode) System.exit(1);
         }
     }
 
-    /**
-     * [FIX-WIN-1] Startet einen Daemon-Thread der den InputStream des Prozesses
-     * parallel liest und logged. Gibt den Thread zurueck damit der Aufrufer
-     * join() aufrufen kann.
-     *
-     * Auf Windows fuellen jar und jpackage ihren stdout/stderr-Puffer mit
-     * Warnungen (Manifest-Duplikate, Signaturdateien etc.). Wenn der Puffer
-     * (~64KB) voll ist, blockiert der Prozess. waitFor() wartet aber darauf
-     * dass der Prozess fertig ist -> Deadlock -> Hang. Fix: parallel lesen.
-     */
     private Thread drainAsync(InputStream is) {
         Thread t = new Thread(() -> {
             try (BufferedReader r = new BufferedReader(new InputStreamReader(is))) {
                 String line;
-                while ((line = r.readLine()) != null) {
-                    log("   " + line + "\n", Color.GRAY);
-                }
-            } catch (IOException ignored) { }
+                while ((line = r.readLine()) != null) log("   " + line + "\n", Color.GRAY);
+            } catch (IOException ignored) {}
         });
         t.setDaemon(true);
         t.start();
@@ -1121,7 +1015,7 @@ public class TBuild {
 
             File fatJar = new File(getAppName() + ".jar");
             if (!fatJar.exists()) {
-                log("[FEHLER] Export-Fat.jar nicht gefunden.\n", Color.RED);
+                log("[FEHLER] " + getAppName() + ".jar nicht gefunden.\n", Color.RED);
                 if (isCliMode) System.exit(1);
                 return;
             }
@@ -1133,69 +1027,49 @@ public class TBuild {
             distDir.mkdirs();
 
             log("[INFO] Starte jpackage fuer App: " + appName + "\n", Color.CYAN);
-            log("[INFO] Main-Klasse: " + mainClass + "\n", Color.CYAN);
 
             String os = System.getProperty("os.name", "").toLowerCase();
+
+            // [NEW-MSI] Windows: msi statt exe, mit fester Upgrade-UUID
             String installerType;
             if (os.contains("win")) {
-                installerType = "exe";
+                installerType = "msi";
             } else if (os.contains("mac")) {
                 installerType = "dmg";
             } else {
-                // Linux: deb bevorzugen, rpm als Fallback
                 installerType = "deb";
             }
 
             List<String> cmd = new ArrayList<>();
             cmd.add(jpackageTool);
             cmd.add("--input");      cmd.add(".");
-            cmd.add("--main-jar");   cmd.add(getAppName() + ".jar");
+            cmd.add("--main-jar");   cmd.add(appName + ".jar");
             cmd.add("--main-class"); cmd.add(mainClass);
             cmd.add("--name");       cmd.add(appName);
             cmd.add("--dest");       cmd.add("dist");
             cmd.add("--type");       cmd.add(installerType);
+            cmd.add("--app-version"); cmd.add(getVersion());
 
-            // Version aus T.xml uebergeben
-            cmd.add("--app-version");
-            cmd.add(getVersion());
-
-            // [FIX-JAVAFX-JPACKAGE] Falls JavaFX-JARs vorhanden sind, muessen diese
-            // als --java-options mit --module-path und --add-modules uebergeben werden,
-            // damit die gepackte App beim Start JavaFX korrekt laden kann.
             List<String> javafxJars = collectJavafxJars();
             if (!javafxJars.isEmpty()) {
-                // jpackage kopiert den --input Ordner; die JARs liegen also relativ zur App.
-                // Wir verwenden den absoluten Pfad des libs/-Ordners fuer die java-options.
                 String libsAbsPath = new File("libs").getAbsolutePath();
                 String modules = detectJavafxModules(javafxJars);
-                // Auf Windows muessen Pfade in java-options mit " " gequotet sein wenn sie Leerzeichen enthalten
                 cmd.add("--java-options");
                 cmd.add("--module-path \"" + libsAbsPath + "\" --add-modules " + modules);
-                log("[INFO] JavaFX jpackage-Optionen: --module-path " + libsAbsPath
-                        + " --add-modules " + modules + "\n", Color.CYAN);
             }
 
-            // OS-spezifische Einstellungen
             if (os.contains("win")) {
-                // Windows: Startmenue und Desktop-Verknuepfung
-                cmd.add("--win-shortcut"); // Erstellt Icon auf dem Desktop
-                cmd.add("--win-menu");     // Erstellt Eintrag im Startmenue (wichtig fuer Windows-Suche)
-            } else if (os.contains("mac")) {
-                // macOS: keine zusaetzlichen Optionen noetig, DMG ist selbsterklaerend
-            } else {
-                // [FIX-JPACKAGE-LINUX-1] Linux: Desktop-Eintrag und Startmenue-Integration
-                // --linux-shortcut erstellt eine .desktop-Datei im Startmenue
+                // [NEW-MSI] Feste UUID fuer saubere Upgrades - Windows erkennt so
+                // dass es sich um eine neue Version derselben App handelt
+                cmd.add("--win-upgrade-uuid"); cmd.add(WIN_UPGRADE_UUID);
+                cmd.add("--win-shortcut");
+                cmd.add("--win-menu");
+                log("[INFO] Windows MSI-Installer mit Upgrade-UUID: " + WIN_UPGRADE_UUID + "\n", Color.CYAN);
+            } else if (!os.contains("mac")) {
                 cmd.add("--linux-shortcut");
-                // [FIX-JPACKAGE-LINUX-2] Kategorie fuer das Startmenue (freedesktop.org Standard)
-                // "Application" ist der allgemeine Fallback, der ueberall funktioniert
-                cmd.add("--linux-app-category");
-                cmd.add("Application");
-                // Installations-Verzeichnis unter /opt fuer saubere Linux-Konvention
-                // (Standard von jpackage ist bereits /opt/<appname>, explizit fuer Klarheit)
-                // Paket-Name (fuer deb/rpm) muss Kleinbuchstaben und keine Leerzeichen haben
+                cmd.add("--linux-app-category"); cmd.add("Application");
                 String packageName = appName.toLowerCase().replaceAll("[^a-z0-9-]", "-");
-                cmd.add("--linux-package-name");
-                cmd.add(packageName);
+                cmd.add("--linux-package-name"); cmd.add(packageName);
                 log("[INFO] Linux-Paketname: " + packageName + "\n", Color.CYAN);
             }
 
@@ -1204,7 +1078,6 @@ public class TBuild {
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.redirectErrorStream(true);
             Process proc = pb.start();
-            // [FIX-WIN-1] jpackage hat ebenfalls viel Output auf Windows
             Thread drainThread = drainAsync(proc.getInputStream());
             int exitCode = proc.waitFor();
             drainThread.join();
@@ -1213,7 +1086,6 @@ public class TBuild {
                 log("[FEHLER] jpackage beendete sich mit Exit-Code " + exitCode + ".\n", Color.RED);
                 log("[TIPP] Unter Windows: WiX Toolset installieren (https://wixtoolset.org)\n", Color.ORANGE);
                 log("[TIPP] Unter Linux (deb): sudo apt install fakeroot\n", Color.ORANGE);
-                log("[TIPP] Unter Linux (rpm): sudo dnf install rpm-build\n", Color.ORANGE);
                 if (isCliMode) System.exit(1);
                 return;
             }
@@ -1226,15 +1098,12 @@ public class TBuild {
             }
             log("[INFO] Installer befindet sich im 'dist/' Ordner.\n", Color.LIGHT_GRAY);
 
-            // [FIX-JPACKAGE-LINUX-1] Erklaerende Hinweise fuer Linux
             if (!os.contains("win") && !os.contains("mac")) {
                 log("[INFO] Linux-Installation: sudo dpkg -i dist/*.deb\n", Color.LIGHT_GRAY);
-                log("[INFO] Nach Installation erscheint die App im Startmenue und als Desktop-Verknuepfung.\n", Color.LIGHT_GRAY);
             }
 
         } catch (Exception e) {
             log("[FEHLER] jpackage fehlgeschlagen: " + e.getMessage() + "\n", Color.RED);
-            e.printStackTrace();
             if (isCliMode) System.exit(1);
         }
     }
@@ -1246,41 +1115,30 @@ public class TBuild {
             if (exe.exists()) return exe.getAbsolutePath();
             File exeWin = new File(javaHome, "bin" + File.separator + "jpackage.exe");
             if (exeWin.exists()) return exeWin.getAbsolutePath();
-            File exeAlt = new File(javaHome + File.separator + ".."
-                    + File.separator + "bin" + File.separator + "jpackage");
-            if (exeAlt.exists()) {
-                try { return exeAlt.getCanonicalPath(); }
-                catch (IOException e) { return exeAlt.getAbsolutePath(); }
-            }
-            File exeAltWin = new File(javaHome + File.separator + ".."
-                    + File.separator + "bin" + File.separator + "jpackage.exe");
-            if (exeAltWin.exists()) {
-                try { return exeAltWin.getCanonicalPath(); }
-                catch (IOException e) { return exeAltWin.getAbsolutePath(); }
-            }
+            File exeAlt = new File(javaHome + File.separator + ".." + File.separator + "bin" + File.separator + "jpackage");
+            if (exeAlt.exists()) { try { return exeAlt.getCanonicalPath(); } catch (IOException e) { return exeAlt.getAbsolutePath(); } }
+            File exeAltWin = new File(javaHome + File.separator + ".." + File.separator + "bin" + File.separator + "jpackage.exe");
+            if (exeAltWin.exists()) { try { return exeAltWin.getCanonicalPath(); } catch (IOException e) { return exeAltWin.getAbsolutePath(); } }
         }
         try {
             Process p = new ProcessBuilder("jpackage", "--version").start();
             p.waitFor();
             if (p.exitValue() == 0) return "jpackage";
-        } catch (Exception ignored) { }
+        } catch (Exception ignored) {}
         return null;
     }
 
     // ================== HELPER METHODS ==================
 
     private void stripModuleInfo(File dir) {
-        log("[INFO] Entferne Modul-Metadaten (JPMS deaktivieren)...\n", Color.GRAY);
+        log("[INFO] Entferne Modul-Metadaten...\n", Color.GRAY);
         try {
             Files.walk(dir.toPath())
                     .filter(p -> {
                         String path = p.toString().replace("\\", "/");
-                        return p.getFileName().toString().equals("module-info.class")
-                                || path.contains("META-INF/versions/");
+                        return p.getFileName().toString().equals("module-info.class") || path.contains("META-INF/versions/");
                     })
-                    .forEach(p -> {
-                        try { Files.deleteIfExists(p); } catch (IOException ignored) { }
-                    });
+                    .forEach(p -> { try { Files.deleteIfExists(p); } catch (IOException ignored) {} });
             Files.walk(dir.toPath())
                     .filter(p -> p.toString().replace("\\", "/").contains("META-INF/versions"))
                     .filter(p -> p.toFile().isDirectory())
@@ -1288,10 +1146,8 @@ public class TBuild {
                     .forEach(p -> {
                         try {
                             File f = p.toFile();
-                            if (f.isDirectory() && f.list() != null && f.list().length == 0) {
-                                Files.deleteIfExists(p);
-                            }
-                        } catch (IOException ignored) { }
+                            if (f.isDirectory() && f.list() != null && f.list().length == 0) Files.deleteIfExists(p);
+                        } catch (IOException ignored) {}
                     });
         } catch (IOException e) {
             log("[WARNUNG] Konnte Modul-Metadaten nicht vollstaendig entfernen.\n", Color.ORANGE);
@@ -1303,9 +1159,7 @@ public class TBuild {
         NodeList children = parent.getChildNodes();
         for (int i = 0; i < children.getLength(); i++) {
             Node n = children.item(i);
-            if (n.getNodeType() == Node.ELEMENT_NODE && n.getNodeName().equals(name)) {
-                return (org.w3c.dom.Element) n;
-            }
+            if (n.getNodeType() == Node.ELEMENT_NODE && n.getNodeName().equals(name)) return (org.w3c.dom.Element) n;
         }
         return null;
     }
@@ -1314,9 +1168,7 @@ public class TBuild {
         NodeList children = parent.getChildNodes();
         for (int i = 0; i < children.getLength(); i++) {
             Node n = children.item(i);
-            if (n.getNodeType() == Node.ELEMENT_NODE && n.getNodeName().equals(name)) {
-                return n.getTextContent().trim();
-            }
+            if (n.getNodeType() == Node.ELEMENT_NODE && n.getNodeName().equals(name)) return n.getTextContent().trim();
         }
         return null;
     }
@@ -1328,10 +1180,7 @@ public class TBuild {
 
     private void deleteDirectory(File dir) throws IOException {
         if (dir.exists()) {
-            Files.walk(dir.toPath())
-                    .sorted(Comparator.reverseOrder())
-                    .map(Path::toFile)
-                    .forEach(File::delete);
+            Files.walk(dir.toPath()).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
         }
     }
 
@@ -1346,9 +1195,7 @@ public class TBuild {
                 } else {
                     Files.copy(sourceNode, targetNode, StandardCopyOption.REPLACE_EXISTING);
                 }
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            } catch (IOException e) { throw new RuntimeException(e); }
         });
     }
 
@@ -1357,12 +1204,8 @@ public class TBuild {
         if (javaHome != null) {
             File jarExe = new File(javaHome, "bin" + File.separator + "jar");
             if (jarExe.exists()) return jarExe.getAbsolutePath();
-            File jarExeAlt = new File(javaHome + File.separator + ".."
-                    + File.separator + "bin" + File.separator + "jar");
-            if (jarExeAlt.exists()) {
-                try { return jarExeAlt.getCanonicalPath(); }
-                catch (IOException e) { return jarExeAlt.getAbsolutePath(); }
-            }
+            File jarExeAlt = new File(javaHome + File.separator + ".." + File.separator + "bin" + File.separator + "jar");
+            if (jarExeAlt.exists()) { try { return jarExeAlt.getCanonicalPath(); } catch (IOException e) { return jarExeAlt.getAbsolutePath(); } }
         }
         return "jar";
     }
@@ -1376,9 +1219,7 @@ public class TBuild {
         if (val.startsWith("${") && val.endsWith("}")) {
             String key = val.substring(2, val.length() - 1);
             String resolved = props.get(key);
-            if (resolved != null && !resolved.equals(val)) {
-                return resolveProperty(resolved, props, depth + 1);
-            }
+            if (resolved != null && !resolved.equals(val)) return resolveProperty(resolved, props, depth + 1);
             return val;
         }
         Matcher m = Pattern.compile("\\$\\{([^}]+)\\}").matcher(val);
@@ -1392,9 +1233,7 @@ public class TBuild {
             }
             m.appendTail(sb);
             String result = sb.toString();
-            if (result.contains("${") && depth < 10) {
-                return resolveProperty(result, props, depth + 1);
-            }
+            if (result.contains("${") && depth < 10) return resolveProperty(result, props, depth + 1);
             return result;
         }
         return val;
@@ -1420,7 +1259,7 @@ public class TBuild {
                 frame, "Name der App:",
                 "Namen festlegen", JOptionPane.PLAIN_MESSAGE, null, null, current);
         if (val != null && !val.trim().isEmpty()) {
-            saveConfig(getMainClass(), val.trim(), getVersion()); // <-- das war der Fehler
+            saveConfig(getMainClass(), val.trim(), getVersion());
             log("[INFO] App-Name auf '" + val.trim() + "' gesetzt.\n", Color.LIGHT_GRAY);
         }
     }
