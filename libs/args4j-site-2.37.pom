@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.kohsuke</groupId>
+    <artifactId>pom</artifactId>
+    <version>21</version>
+  </parent>
+
+  <groupId>args4j</groupId>
+  <artifactId>args4j-site</artifactId>
+  <name>args4j parent</name>
+  <version>2.37</version>
+  <packaging>pom</packaging>
+  <description>args4j : Java command line arguments parser</description>
+  <url>http://args4j.kohsuke.org/</url>
+  <issueManagement>
+    <url>https://args4j.dev.java.net/issues</url>
+  </issueManagement>
+  <inceptionYear>2003</inceptionYear>
+
+  <ciManagement>
+    <notifiers>
+      <notifier>
+        <configuration>
+          <address>kk@kohsuke.org</address>
+        </configuration>
+      </notifier>
+    </notifiers>
+  </ciManagement>
+  <mailingLists>
+    <mailingList>
+      <name>discussion list</name>
+      <subscribe>users-subscribe@args4j.dev.java.net</subscribe>
+      <unsubscribe>users-ubsubscribe@args4j.dev.java.net</unsubscribe>
+      <archive>https://args4j.dev.java.net/servlets/SummarizeList?listName=users</archive>
+    </mailingList>
+  </mailingLists>
+
+  <developers>
+    <developer>
+      <id>kohsuke</id>
+      <name>Kohsuke Kawaguchi</name>
+      <email>kk@kohsuke.org</email>
+      <organization>Sun Microsystems</organization>
+    </developer>
+    <developer>
+      <id>jhm</id>
+      <name>Jan Materne</name>
+      <email>jhm@apache.org</email>
+    </developer>
+    <developer>
+      <id>marksinke</id>
+      <name>Mark Sinke</name>
+      <email>marksinke@dev.java.net</email>
+    </developer>
+    <developer>
+      <id>lacostej</id>
+      <name>Jerome Lacoste</name>
+      <email>jerome@coffeebreaks.org</email>
+    </developer>
+  </developers>
+
+  <scm>
+    <connection>scm:git:git@github.com/kohsuke/args4j.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/kohsuke/args4j.git</developerConnection>
+    <url>http://args4j.kohsuke.org/</url>
+    <tag>args4j-site-2.37</tag>
+  </scm>
+
+  <distributionManagement>
+    <site>
+      <id>github-pages</id>
+      <url>gitsite:git@github.com/kohsuke/args4j.git</url>
+    </site>
+  </distributionManagement>
+
+  <organization>
+    <name>Kohsuke Kawaguchi</name>
+    <url>http://www.kohsuke.org/</url>
+  </organization>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <java.level>11</java.level>
+  </properties>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.8.1</version>
+        </plugin>
+
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-source-plugin</artifactId>
+          <version>3.2.1</version>
+        </plugin>
+
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-javadoc-plugin</artifactId>
+          <version>3.6.3</version>
+        </plugin>
+
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-plugin-plugin</artifactId>
+          <version>3.11.0</version>
+        </plugin>
+
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-resources-plugin</artifactId>
+          <version>3.3.0</version>
+        </plugin>
+
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-jar-plugin</artifactId>
+          <version>3.2.0</version>
+        </plugin>
+
+        <!--This plugin's configuration is used to store Eclipse m2e settings only. It has no influence on the Maven build itself.-->
+        <plugin>
+          <groupId>org.eclipse.m2e</groupId>
+          <artifactId>lifecycle-mapping</artifactId>
+          <version>1.0.0</version>
+          <configuration>
+            <lifecycleMappingMetadata>
+              <pluginExecutions>
+                <pluginExecution>
+                  <pluginExecutionFilter>
+                    <groupId>
+                      org.apache.maven.plugins
+                    </groupId>
+                    <artifactId>
+                      maven-plugin-plugin
+                    </artifactId>
+                    <versionRange>[3.2,)</versionRange>
+                    <goals>
+                      <goal>descriptor</goal>
+                    </goals>
+                  </pluginExecutionFilter>
+                  <action>
+                    <ignore />
+                  </action>
+                </pluginExecution>
+                <pluginExecution>
+                  <pluginExecutionFilter>
+                    <groupId>org.codehaus.gmaven</groupId>
+                    <artifactId>gmaven-plugin</artifactId>
+                    <versionRange>[1.4,)</versionRange>
+                    <goals>
+                      <goal>testCompile</goal>
+                    </goals>
+                  </pluginExecutionFilter>
+                  <action>
+                    <ignore />
+                  </action>
+                </pluginExecution>
+              </pluginExecutions>
+            </lifecycleMappingMetadata>
+          </configuration>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+
+    <plugins>
+      <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <source>${java.level}</source>
+          <target>${java.level}</target>
+          <compilerArgument>-proc:none</compilerArgument>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <failOnError>false</failOnError>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-source-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>jar-no-fork</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-site-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.felix</groupId>
+        <artifactId>maven-bundle-plugin</artifactId>
+        <version>5.1.9</version>
+        <extensions>true</extensions>
+        <configuration>
+          <instructions>
+            <Bundle-SymbolicName>org.kohsuke.${project.artifactId}</Bundle-SymbolicName>
+            <_includeresource>${basedir}/../LICENSE</_includeresource>
+            <_sources>true</_sources>
+          </instructions>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+  <reporting>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-project-info-reports-plugin</artifactId>
+        <version>2.9</version>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-javadoc-plugin</artifactId>
+        <version>3.6.3</version>
+        <configuration>
+          <skip>true</skip>
+        </configuration>
+      </plugin>
+    </plugins>
+  </reporting>
+
+  <licenses>
+    <license>
+      <name>MIT License</name>
+      <url>http://www.opensource.org/licenses/mit-license.php</url>
+    </license>
+  </licenses>
+
+  <modules>
+    <module>args4j</module>
+    <module>args4j-tools</module>
+    <module>args4j-maven-plugin</module>
+    <module>args4j-maven-plugin-example</module>
+  </modules>
+</project>
