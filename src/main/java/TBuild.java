@@ -34,9 +34,14 @@ import java.util.regex.Pattern;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JPasswordField;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTextField;
@@ -49,6 +54,21 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.text.Style;
 import javax.swing.text.StyleConstants;
 import javax.swing.text.StyledDocument;
+// JGit
+import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.CloneCommand;
+import org.eclipse.jgit.api.PushCommand;
+import org.eclipse.jgit.api.PullResult;
+import org.eclipse.jgit.api.Status;
+import org.eclipse.jgit.api.ListBranchCommand;
+import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.lib.Repository;
+import org.eclipse.jgit.lib.Ref;
+import org.eclipse.jgit.lib.BranchConfig;
+import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
+import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
+import org.eclipse.jgit.transport.URIish;
+import org.eclipse.jgit.revwalk.RevCommit;
 import javax.tools.Diagnostic;
 import javax.tools.DiagnosticCollector;
 import javax.tools.JavaCompiler;
@@ -107,6 +127,11 @@ public class TBuild {
     private Map<String, PomData> pomCache = new ConcurrentHashMap<>();
     private AtomicInteger activeDownloadTasks = new AtomicInteger(0);
     private boolean isCliMode = false;
+
+    // ================== GIT FELDER ==================
+    // Pfad zur git-credentials Datei (gleich wie natives Git)
+    private static final File GIT_CREDENTIALS_FILE =
+            new File(System.getProperty("user.home"), ".git-credentials");
 
     // ================== ENTRY POINT ==================
 
@@ -218,6 +243,10 @@ public class TBuild {
         root.setBorder(new EmptyBorder(10, 10, 10, 10));
         frame.setContentPane(root);
 
+        
+	   
+
+
         JToolBar top = new JToolBar();
         top.setFloatable(false);
         JButton initBtn      = new JButton("Projekt initialisieren");
@@ -229,7 +258,9 @@ public class TBuild {
         JButton exportFatBtn = new JButton("Export JAR");
         JButton jpackageBtn  = new JButton("jpackage Installer");
         JButton nameBtn      = new JButton("Namen festlegen");
-
+	   JButton uuidBtn = new JButton("UUID festlegen");
+	   
+	   uuidBtn.addActionListener(e -> setUuidDialog());
         initBtn.addActionListener(e -> initProject());
         buildBtn.addActionListener(e -> runBuild());
         mainBtn.addActionListener(e -> setMainDialog());
@@ -255,6 +286,49 @@ public class TBuild {
         top.add(versionBtn);
         top.add(clearBtn);
         top.add(nameBtn);
+        top.add(uuidBtn);
+
+        // ---- Git-Dropdown ----
+        JMenuBar menuBarGit = new JMenuBar();
+        menuBarGit.setOpaque(false);
+        menuBarGit.setBorder(null);
+        JMenu gitMenu = new JMenu("⎇ Git ▾");
+        gitMenu.setForeground(new Color(255, 200, 80));
+        gitMenu.setFont(gitMenu.getFont().deriveFont(Font.BOLD));
+
+        JMenuItem gitLogin       = new JMenuItem("🔑  Anmelden / Konto wechseln");
+        JMenuItem gitStatus      = new JMenuItem("📋  Status anzeigen");
+        JMenuItem gitInitLocal   = new JMenuItem("📁  Lokales Repo erstellen (init)");
+        JMenuItem gitClone       = new JMenuItem("📥  Repo klonen");
+        JMenuItem gitCreateGH    = new JMenuItem("🌐  Neues GitHub-Repo erstellen");
+        JMenuItem gitAddRemote   = new JMenuItem("🔗  Remote hinzufügen");
+        JMenuItem gitBranch      = new JMenuItem("🌿  Branch anzeigen / wechseln");
+        JMenuItem gitCreateBranch= new JMenuItem("➕  Neuen Branch erstellen");
+
+        gitMenu.add(gitLogin);
+        gitMenu.addSeparator();
+        gitMenu.add(gitStatus);
+        gitMenu.addSeparator();
+        gitMenu.add(gitInitLocal);
+        gitMenu.add(gitClone);
+        gitMenu.add(gitCreateGH);
+        gitMenu.add(gitAddRemote);
+        gitMenu.addSeparator();
+        gitMenu.add(gitBranch);
+        gitMenu.add(gitCreateBranch);
+
+        gitLogin.addActionListener(e        -> gitLogin());
+        gitStatus.addActionListener(e       -> gitStatus());
+        gitInitLocal.addActionListener(e    -> gitInitLocal());
+        gitClone.addActionListener(e        -> gitClone());
+        gitCreateGH.addActionListener(e     -> gitCreateGitHub());
+        gitAddRemote.addActionListener(e    -> gitAddRemote());
+        gitBranch.addActionListener(e       -> gitShowBranches());
+        gitCreateBranch.addActionListener(e -> gitCreateBranch());
+
+        menuBarGit.add(gitMenu);
+        top.add(menuBarGit);
+
         root.add(top, BorderLayout.NORTH);
 
         console = new JTextPane();
@@ -291,6 +365,13 @@ public class TBuild {
         });
 
         log("[INFO] T-build gestartet. Bereit.\n", Color.LIGHT_GRAY);
+        // Git-Credentials beim Start prüfen
+        String[] creds = loadGitCredentials();
+        if (creds != null) {
+            log("[GIT]  Angemeldet als: " + creds[0] + "\n", new Color(255, 200, 80));
+        } else {
+            log("[GIT]  Nicht angemeldet. Git → Anmelden um Push/Pull zu nutzen.\n", Color.ORANGE);
+        }
         frame.setVisible(true);
     }
 
@@ -528,6 +609,31 @@ public class TBuild {
         return cp.toString();
     }
 
+    // ================== UUID MANAGEMENT ========================
+    private void setUuidDialog() {
+    String current = getUpgradeUuid();
+    String val = (String) JOptionPane.showInputDialog(
+            frame, "Windows MSI Upgrade-UUID (Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx):",
+            "UUID festlegen", JOptionPane.PLAIN_MESSAGE, null, null, current);
+    if (val != null && !val.trim().isEmpty()) {
+        saveConfig(getMainClass(), getAppName(), getVersion(), val.trim());
+        log("[INFO] Upgrade-UUID auf '" + val.trim() + "' gesetzt.\n", Color.LIGHT_GRAY);
+    }
+}
+
+	private String getUpgradeUuid() {
+    try {
+        File f = new File("T.xml");
+        if (!f.exists()) return WIN_UPGRADE_UUID;
+        Document doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(f);
+        NodeList nl = doc.getElementsByTagName("winUpgradeUuid");
+        if (nl.getLength() > 0 && !nl.item(0).getTextContent().trim().isEmpty()) {
+            return nl.item(0).getTextContent().trim();
+        }
+    } catch (Exception ignored) {}
+    return WIN_UPGRADE_UUID;
+}
+
     // ================== MAIN CLASS MANAGEMENT ==================
 
     private void setMainDialog() {
@@ -591,15 +697,21 @@ public class TBuild {
         return dot >= 0 ? mc.substring(dot + 1) : mc;
     }
 
-    private void saveConfig(String mc, String appName, String version) {
-        try (PrintWriter pw = new PrintWriter("T.xml")) {
-            pw.println("<project>");
-            pw.println("  <mainClass>" + mc + "</mainClass>");
-            pw.println("  <appName>" + appName + "</appName>");
-            pw.println("  <version>" + version + "</version>");
-            pw.println("</project>");
-        } catch (Exception ignored) {}
-    }
+    private void saveConfig(String mc, String appName, String version, String uuid) {
+    try (PrintWriter pw = new PrintWriter("T.xml")) {
+        pw.println("<project>");
+        pw.println("  <mainClass>" + mc + "</mainClass>");
+        pw.println("  <appName>" + appName + "</appName>");
+        pw.println("  <version>" + version + "</version>");
+        pw.println("  <winUpgradeUuid>" + uuid + "</winUpgradeUuid>");
+        pw.println("</project>");
+    } catch (Exception ignored) {}
+}
+
+	// Overload für Rückwärtskompatibilität
+private void saveConfig(String mc, String appName, String version) {
+    saveConfig(mc, appName, version, getUpgradeUuid());
+}
 
     // ================== MAVEN SEARCH ==================
 
@@ -1061,10 +1173,10 @@ public class TBuild {
             if (os.contains("win")) {
                 // [NEW-MSI] Feste UUID fuer saubere Upgrades - Windows erkennt so
                 // dass es sich um eine neue Version derselben App handelt
-                cmd.add("--win-upgrade-uuid"); cmd.add(WIN_UPGRADE_UUID);
+                cmd.add("--win-upgrade-uuid"); cmd.add(getUpgradeUuid());
                 cmd.add("--win-shortcut");
                 cmd.add("--win-menu");
-                log("[INFO] Windows MSI-Installer mit Upgrade-UUID: " + WIN_UPGRADE_UUID + "\n", Color.CYAN);
+                log("[INFO] Windows MSI-Installer mit Upgrade-UUID: " + getUpgradeUuid() + "\n", Color.CYAN);
             } else if (!os.contains("mac")) {
                 cmd.add("--linux-shortcut");
                 cmd.add("--linux-app-category"); cmd.add("Application");
@@ -1131,14 +1243,26 @@ public class TBuild {
     // ================== HELPER METHODS ==================
 
     private void stripModuleInfo(File dir) {
-        log("[INFO] Entferne Modul-Metadaten...\n", Color.GRAY);
+        log("[INFO] Entferne Modul-Metadaten und JAR-Signaturen...\n", Color.GRAY);
         try {
             Files.walk(dir.toPath())
                     .filter(p -> {
                         String path = p.toString().replace("\\", "/");
-                        return p.getFileName().toString().equals("module-info.class") || path.contains("META-INF/versions/");
+                        String name = p.getFileName().toString().toUpperCase();
+                        // module-info.class entfernen
+                        if (name.equals("MODULE-INFO.CLASS")) return true;
+                        // META-INF/versions entfernen
+                        if (path.contains("META-INF/versions/")) return true;
+                        // JAR-Signaturdateien entfernen (.SF, .RSA, .DSA, .EC)
+                        // Diese machen das Fat-JAR unbrauchbar
+                        if (path.contains("META-INF/") && !p.toFile().isDirectory()) {
+                            return name.endsWith(".SF") || name.endsWith(".RSA")
+                                || name.endsWith(".DSA") || name.endsWith(".EC");
+                        }
+                        return false;
                     })
                     .forEach(p -> { try { Files.deleteIfExists(p); } catch (IOException ignored) {} });
+            // Leere META-INF/versions Verzeichnisse aufräumen
             Files.walk(dir.toPath())
                     .filter(p -> p.toString().replace("\\", "/").contains("META-INF/versions"))
                     .filter(p -> p.toFile().isDirectory())
@@ -1150,7 +1274,7 @@ public class TBuild {
                         } catch (IOException ignored) {}
                     });
         } catch (IOException e) {
-            log("[WARNUNG] Konnte Modul-Metadaten nicht vollstaendig entfernen.\n", Color.ORANGE);
+            log("[WARNUNG] Konnte Metadaten nicht vollstaendig entfernen.\n", Color.ORANGE);
         }
     }
 
@@ -1251,6 +1375,434 @@ public class TBuild {
     private static class Dependency {
         String groupId, artifactId, version, scope;
         boolean optional;
+    }
+
+    // ================== GIT CREDENTIALS ==================
+
+    /**
+     * Liest ~/.git-credentials und gibt [username, token] zurueck,
+     * oder null wenn kein GitHub-Eintrag vorhanden.
+     * Format der Datei: https://user:token@github.com
+     */
+    private String[] loadGitCredentials() {
+        // 1. ~/.git-credentials (git credential store)
+        if (GIT_CREDENTIALS_FILE.exists()) {
+            try {
+                List<String> lines = Files.readAllLines(GIT_CREDENTIALS_FILE.toPath());
+                for (String line : lines) {
+                    line = line.trim();
+                    if (line.contains("github.com") && line.startsWith("https://")) {
+                        String part = line.substring("https://".length());
+                        int atIdx = part.lastIndexOf('@');
+                        if (atIdx > 0) {
+                            String userPass = part.substring(0, atIdx);
+                            int colonIdx = userPass.indexOf(':');
+                            if (colonIdx > 0) {
+                                return new String[]{
+                                    userPass.substring(0, colonIdx),
+                                    userPass.substring(colonIdx + 1)
+                                };
+                            }
+                        }
+                    }
+                }
+            } catch (IOException ignored) {}
+        }
+        // 2. git credential fill (Windows Credential Manager, macOS Keychain, etc.)
+        try {
+            ProcessBuilder pb = new ProcessBuilder("git", "credential", "fill");
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            p.getOutputStream().write("protocol=https\nhost=github.com\n\n".getBytes());
+            p.getOutputStream().flush();
+            p.getOutputStream().close();
+            String out = new String(p.getInputStream().readAllBytes()).trim();
+            p.waitFor(3, TimeUnit.SECONDS);
+            String user = null, pass = null;
+            for (String l : out.split("[\r\n]+")) {
+                if (l.startsWith("username=")) user = l.substring(9).trim();
+                if (l.startsWith("password=")) pass = l.substring(9).trim();
+            }
+            if (user != null && pass != null && !user.isEmpty() && !pass.isEmpty()) {
+                return new String[]{user, pass};
+            }
+        } catch (Exception ignored) {}
+        // 3. Nur Username aus git config (fuer Anzeige, kein Token)
+        try {
+            Process p = new ProcessBuilder("git", "config", "--global", "user.name")
+                    .redirectErrorStream(true).start();
+            String name = new String(p.getInputStream().readAllBytes()).trim();
+            p.waitFor(2, TimeUnit.SECONDS);
+            if (!name.isEmpty()) return new String[]{name, null};
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    /**
+     * Speichert Credentials in ~/.git-credentials.
+     * Vorhandene GitHub-Eintraege werden ersetzt.
+     */
+    private void saveGitCredentials(String username, String token) {
+        try {
+            List<String> lines = new ArrayList<>();
+            if (GIT_CREDENTIALS_FILE.exists()) {
+                lines = new ArrayList<>(Files.readAllLines(GIT_CREDENTIALS_FILE.toPath()));
+                lines.removeIf(l -> l.contains("github.com"));
+            }
+            lines.add("https://" + username + ":" + token + "@github.com");
+            Files.write(GIT_CREDENTIALS_FILE.toPath(), lines);
+            // Datei nur fuer den Nutzer lesbar machen (Unix)
+            GIT_CREDENTIALS_FILE.setReadable(false, false);
+            GIT_CREDENTIALS_FILE.setReadable(true, true);
+            GIT_CREDENTIALS_FILE.setWritable(false, false);
+            GIT_CREDENTIALS_FILE.setWritable(true, true);
+        } catch (IOException e) {
+            log("[GIT FEHLER] Credentials konnten nicht gespeichert werden: " + e.getMessage() + "\n", Color.RED);
+        }
+    }
+
+    /** Gibt einen CredentialsProvider fuer JGit zurueck, oder null wenn nicht angemeldet. */
+    private UsernamePasswordCredentialsProvider getCredentialsProvider() {
+        String[] creds = loadGitCredentials();
+        if (creds == null || creds[1] == null || creds[1].isEmpty()) return null;
+        return new UsernamePasswordCredentialsProvider(creds[0], creds[1]);
+    }
+
+    /** Hilfsmethode: Git-Repo im aktuellen Verzeichnis oeffnen */
+    private Git openLocalRepo() throws IOException, GitAPIException {
+        FileRepositoryBuilder builder = new FileRepositoryBuilder();
+        Repository repo = builder.findGitDir(new File(".")).readEnvironment().build();
+        return new Git(repo);
+    }
+
+    // ================== GIT AKTIONEN ==================
+
+    private void gitLogin() {
+        String[] existing = loadGitCredentials();
+        String defaultUser = existing != null ? existing[0] : "";
+
+        JPanel panel = new JPanel(new java.awt.GridLayout(4, 2, 8, 8));
+        panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+        JTextField userField  = new JTextField(defaultUser, 20);
+        JPasswordField passField = new JPasswordField(20);
+        panel.add(new JLabel("GitHub-Benutzername:"));
+        panel.add(userField);
+        panel.add(new JLabel("Personal Access Token:"));
+        panel.add(passField);
+        panel.add(new JLabel("<html><small>Token erstellen: github.com →<br>Settings → Developer settings → PAT</small></html>"));
+        panel.add(new JLabel(""));
+        if (existing != null) {
+            panel.add(new JLabel("<html><small style='color:green'>✓ Bereits angemeldet als " + existing[0] + "</small></html>"));
+        } else {
+            panel.add(new JLabel(""));
+        }
+
+        int result = JOptionPane.showConfirmDialog(frame, panel,
+                "GitHub Anmeldung", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) return;
+
+        String user  = userField.getText().trim();
+        String token = new String(passField.getPassword()).trim();
+        if (user.isEmpty() || token.isEmpty()) {
+            log("[GIT FEHLER] Benutzername und Token duerfen nicht leer sein.\n", Color.RED);
+            return;
+        }
+        // Verbindung testen
+        new Thread(() -> {
+            log("[GIT] Teste Verbindung zu GitHub...\n", Color.CYAN);
+            try {
+                URL url = new URL("https://api.github.com/user");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestProperty("Authorization", "token " + token);
+                conn.setRequestProperty("User-Agent", "TBuild");
+                conn.setConnectTimeout(8000);
+                conn.setReadTimeout(8000);
+                int code = conn.getResponseCode();
+                if (code == 200) {
+                    saveGitCredentials(user, token);
+                    log("[GIT] ✓ Erfolgreich angemeldet als: " + user + "\n", new Color(80, 200, 120));
+                } else {
+                    log("[GIT FEHLER] Anmeldung fehlgeschlagen (HTTP " + code + "). Token gueltig?\n", Color.RED);
+                }
+            } catch (Exception e) {
+                log("[GIT FEHLER] Verbindung fehlgeschlagen: " + e.getMessage() + "\n", Color.RED);
+            }
+        }).start();
+    }
+
+    private void gitStatus() {
+        new Thread(() -> {
+            try (Git git = openLocalRepo()) {
+                Status status = git.status().call();
+                log("[GIT] === Repository Status ===\n", new Color(255, 200, 80));
+                log("[GIT] Branch: " + git.getRepository().getBranch() + "\n", Color.CYAN);
+                if (!status.getAdded().isEmpty())
+                    log("[GIT] Neu (staged):      " + status.getAdded() + "\n", new Color(80, 200, 120));
+                if (!status.getModified().isEmpty())
+                    log("[GIT] Geaendert:         " + status.getModified() + "\n", Color.ORANGE);
+                if (!status.getUntracked().isEmpty())
+                    log("[GIT] Untracked:         " + status.getUntracked() + "\n", Color.LIGHT_GRAY);
+                if (!status.getRemoved().isEmpty())
+                    log("[GIT] Geloescht:         " + status.getRemoved() + "\n", Color.RED);
+                if (!status.getConflicting().isEmpty())
+                    log("[GIT] Konflikte:         " + status.getConflicting() + "\n", Color.RED);
+                if (status.isClean())
+                    log("[GIT] ✓ Alles sauber, nichts zu committen.\n", new Color(80, 200, 120));
+            } catch (Exception e) {
+                log("[GIT FEHLER] Kein Git-Repo gefunden oder Fehler: " + e.getMessage() + "\n", Color.RED);
+            }
+        }).start();
+    }
+
+    private void gitInitLocal() {
+        int confirm = JOptionPane.showConfirmDialog(frame,
+                "Git-Repository im aktuellen Verzeichnis initialisieren?",
+                "Lokales Repo erstellen", JOptionPane.YES_NO_OPTION);
+        if (confirm != JOptionPane.YES_OPTION) return;
+        new Thread(() -> {
+            try {
+                Git.init().setDirectory(new File(".")).call().close();
+                log("[GIT] ✓ Git-Repository initialisiert.\n", new Color(80, 200, 120));
+            } catch (GitAPIException e) {
+                log("[GIT FEHLER] Init fehlgeschlagen: " + e.getMessage() + "\n", Color.RED);
+            }
+        }).start();
+    }
+
+    private void gitClone() {
+        JPanel panel = new JPanel(new java.awt.GridLayout(3, 2, 8, 8));
+        panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+        JTextField urlField    = new JTextField("https://github.com/user/repo.git", 30);
+        JTextField targetField = new JTextField(new File(".").getAbsolutePath(), 30);
+        panel.add(new JLabel("Repository-URL:")); panel.add(urlField);
+        panel.add(new JLabel("Zielordner:"));      panel.add(targetField);
+        panel.add(new JLabel(""));                 panel.add(new JLabel(""));
+
+        int result = JOptionPane.showConfirmDialog(frame, panel,
+                "Repo klonen", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) return;
+
+        String repoUrl = urlField.getText().trim();
+        String target  = targetField.getText().trim();
+
+        new Thread(() -> {
+            log("[GIT] Klone " + repoUrl + "...\n", Color.CYAN);
+            try {
+                CloneCommand cmd = Git.cloneRepository()
+                        .setURI(repoUrl)
+                        .setDirectory(new File(target));
+                UsernamePasswordCredentialsProvider cp = getCredentialsProvider();
+                if (cp != null) cmd.setCredentialsProvider(cp);
+                try (Git git = cmd.call()) {
+                    log("[GIT] ✓ Erfolgreich geklont nach: " + target + "\n", new Color(80, 200, 120));
+                }
+            } catch (GitAPIException e) {
+                log("[GIT FEHLER] Klonen fehlgeschlagen: " + e.getMessage() + "\n", Color.RED);
+            }
+        }).start();
+    }
+
+    private void gitCreateGitHub() {
+        String[] creds = loadGitCredentials();
+        if (creds == null) {
+            log("[GIT] Bitte zuerst anmelden (Git → Anmelden).\n", Color.ORANGE);
+            return;
+        }
+        JPanel panel = new JPanel(new java.awt.GridLayout(4, 2, 8, 8));
+        panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+        JTextField nameField = new JTextField("", 20);
+        JTextField descField = new JTextField("", 20);
+        javax.swing.JCheckBox privateBox = new javax.swing.JCheckBox("Privates Repo", false);
+        javax.swing.JCheckBox initLocalBox = new javax.swing.JCheckBox("Auch lokal init + remote setzen", true);
+        try { nameField.setText(new File(".").getCanonicalFile().getName()); } catch (Exception ignored) {}
+        panel.add(new JLabel("Repo-Name:"));    panel.add(nameField);
+        panel.add(new JLabel("Beschreibung:")); panel.add(descField);
+        panel.add(privateBox);                  panel.add(initLocalBox);
+        panel.add(new JLabel(""));              panel.add(new JLabel(""));
+
+        int result = JOptionPane.showConfirmDialog(frame, panel,
+                "Neues GitHub-Repo erstellen", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) return;
+
+        String repoName  = nameField.getText().trim();
+        String desc      = descField.getText().trim();
+        boolean isPrivate = privateBox.isSelected();
+        boolean initLocal = initLocalBox.isSelected();
+
+        new Thread(() -> {
+            log("[GIT] Erstelle GitHub-Repo: " + repoName + "...\n", Color.CYAN);
+            try {
+                String body = "{\"name\":\"" + repoName + "\","
+                        + "\"description\":\"" + desc + "\","
+                        + "\"private\":" + isPrivate + "}";
+                URL url = new URL("https://api.github.com/user/repos");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("POST");
+                conn.setRequestProperty("Authorization", "token " + creds[1]);
+                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setRequestProperty("User-Agent", "TBuild");
+                conn.setDoOutput(true);
+                conn.setConnectTimeout(8000);
+                conn.setReadTimeout(8000);
+                try (java.io.OutputStream os = conn.getOutputStream()) {
+                    os.write(body.getBytes(StandardCharsets.UTF_8));
+                }
+                int code = conn.getResponseCode();
+                if (code == 201) {
+                    String repoUrl = "https://github.com/" + creds[0] + "/" + repoName + ".git";
+                    log("[GIT] ✓ Repo erstellt: " + repoUrl + "\n", new Color(80, 200, 120));
+                    if (initLocal) {
+                        // Lokal init + remote setzen + ersten Commit
+                        File dot = new File(".");
+                        boolean alreadyInit = new File(".git").exists();
+                        Git git;
+                        if (!alreadyInit) {
+                            git = Git.init().setDirectory(dot).call();
+                            log("[GIT] Lokales Repo initialisiert.\n", Color.CYAN);
+                        } else {
+                            git = openLocalRepo();
+                        }
+                        try {
+                            // .gitignore erstellen falls nicht vorhanden
+                            File gitignore = new File(".gitignore");
+                            if (!gitignore.exists()) {
+                                Files.write(gitignore.toPath(),
+                                        "out/\nbuild_temp/\ndist/\n*.class\n*.tmp\n".getBytes());
+                            }
+                            git.add().addFilepattern(".").call();
+                            try {
+                                git.commit().setMessage("Initial commit").call();
+                            } catch (Exception ignored) {}
+                            git.remoteAdd().setName("origin").setUri(new URIish(repoUrl)).call();
+                            PushCommand push = git.push().setRemote("origin")
+                                    .setCredentialsProvider(new UsernamePasswordCredentialsProvider(creds[0], creds[1]));
+                            push.call();
+                            log("[GIT] ✓ Remote gesetzt und gepusht: " + repoUrl + "\n", new Color(80, 200, 120));
+                        } finally {
+                            git.close();
+                        }
+                    }
+                } else {
+                    // Fehlermeldung lesen
+                    StringBuilder sb = new StringBuilder();
+                    try (BufferedReader br = new BufferedReader(new InputStreamReader(
+                            code >= 400 ? conn.getErrorStream() : conn.getInputStream()))) {
+                        String l;
+                        while ((l = br.readLine()) != null) sb.append(l);
+                    }
+                    log("[GIT FEHLER] GitHub antwortet " + code + ": " + sb + "\n", Color.RED);
+                }
+            } catch (Exception e) {
+                log("[GIT FEHLER] " + e.getMessage() + "\n", Color.RED);
+            }
+        }).start();
+    }
+
+    private void gitAddRemote() {
+        JPanel panel = new JPanel(new java.awt.GridLayout(2, 2, 8, 8));
+        panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+        JTextField nameField = new JTextField("origin", 15);
+        JTextField urlField  = new JTextField("https://github.com/user/repo.git", 30);
+        panel.add(new JLabel("Remote-Name:")); panel.add(nameField);
+        panel.add(new JLabel("URL:"));         panel.add(urlField);
+
+        int result = JOptionPane.showConfirmDialog(frame, panel,
+                "Remote hinzufügen", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) return;
+
+        String remoteName = nameField.getText().trim();
+        String remoteUrl  = urlField.getText().trim();
+        new Thread(() -> {
+            try (Git git = openLocalRepo()) {
+                git.remoteAdd().setName(remoteName).setUri(new URIish(remoteUrl)).call();
+                log("[GIT] ✓ Remote '" + remoteName + "' hinzugefügt: " + remoteUrl + "\n", new Color(80, 200, 120));
+            } catch (Exception e) {
+                log("[GIT FEHLER] " + e.getMessage() + "\n", Color.RED);
+            }
+        }).start();
+    }
+
+    private void gitShowBranches() {
+        new Thread(() -> {
+            try (Git git = openLocalRepo()) {
+                List<Ref> branches = git.branchList().call();
+                String current = git.getRepository().getBranch();
+                log("[GIT] === Branches ===\n", new Color(255, 200, 80));
+                List<String> names = new ArrayList<>();
+                for (Ref ref : branches) {
+                    String name = ref.getName().replace("refs/heads/", "");
+                    names.add(name);
+                    String marker = name.equals(current) ? "  ← aktuell" : "";
+                    log("[GIT]   " + name + marker + "\n", name.equals(current) ? new Color(80, 200, 120) : Color.LIGHT_GRAY);
+                }
+                // Branch wechseln
+                SwingUtilities.invokeLater(() -> {
+                    if (names.isEmpty()) { log("[GIT] Keine Branches gefunden.\n", Color.ORANGE); return; }
+                    String choice = (String) JOptionPane.showInputDialog(frame,
+                            "Branch wechseln (aktuell: " + current + "):",
+                            "Branch wechseln", JOptionPane.PLAIN_MESSAGE,
+                            null, names.toArray(), current);
+                    if (choice != null && !choice.equals(current)) {
+                        new Thread(() -> {
+                            try (Git g = openLocalRepo()) {
+                                g.checkout().setName(choice).call();
+                                log("[GIT] ✓ Gewechselt zu Branch: " + choice + "\n", new Color(80, 200, 120));
+                            } catch (Exception ex) {
+                                log("[GIT FEHLER] " + ex.getMessage() + "\n", Color.RED);
+                            }
+                        }).start();
+                    }
+                });
+            } catch (Exception e) {
+                log("[GIT FEHLER] " + e.getMessage() + "\n", Color.RED);
+            }
+        }).start();
+    }
+
+    private void gitCreateBranch() {
+        String name = (String) JOptionPane.showInputDialog(frame,
+                "Name des neuen Branches:", "Neuen Branch erstellen",
+                JOptionPane.PLAIN_MESSAGE, null, null, "feature/neu");
+        if (name == null || name.trim().isEmpty()) return;
+        new Thread(() -> {
+            try (Git git = openLocalRepo()) {
+                git.checkout().setCreateBranch(true).setName(name.trim()).call();
+                log("[GIT] ✓ Branch erstellt und gewechselt: " + name.trim() + "\n", new Color(80, 200, 120));
+            } catch (Exception e) {
+                log("[GIT FEHLER] " + e.getMessage() + "\n", Color.RED);
+            }
+        }).start();
+    }
+
+    // ================== GIT METHODEN FUER TIDE (statisch abrufbar) ==================
+
+    /**
+     * Wird von TIDE aufgerufen um Credentials zu laden.
+     * Gibt [username, token] oder null zurueck.
+     */
+    public static String[] loadGitCredentialsStatic() {
+        if (!GIT_CREDENTIALS_FILE.exists()) return null;
+        try {
+            List<String> lines = Files.readAllLines(GIT_CREDENTIALS_FILE.toPath());
+            for (String line : lines) {
+                line = line.trim();
+                if (line.contains("github.com") && line.startsWith("https://")) {
+                    String part = line.substring("https://".length());
+                    int atIdx = part.lastIndexOf('@');
+                    if (atIdx > 0) {
+                        String userPass = part.substring(0, atIdx);
+                        int colonIdx = userPass.indexOf(':');
+                        if (colonIdx > 0) {
+                            return new String[]{
+                                userPass.substring(0, colonIdx),
+                                userPass.substring(colonIdx + 1)
+                            };
+                        }
+                    }
+                }
+            }
+        } catch (IOException ignored) {}
+        return null;
     }
 
     private void setName() {
