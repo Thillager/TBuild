@@ -725,7 +725,9 @@ private void saveConfig(String mc, String appName, String version) {
                     resultModel.addElement("Suche laeuft...");
                 });
                 String encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8.name());
-                String url = "https://search.maven.org/solrsearch/select?q=" + encodedQuery + "&rows=15&wt=json";
+                // Wir suchen jetzt explizit nach der ArtifactID ODER der GroupID
+// "a:..." findet das Hauptpaket deutlich zuverlässiger
+String url = "https://search.maven.org/solrsearch/select?q=a:" + encodedQuery + "+OR+" + encodedQuery + "&rows=30&wt=json";
                 String json = fetchUrl(url);
                 SwingUtilities.invokeLater(() -> resultModel.clear());
                 Matcher m = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(json);
