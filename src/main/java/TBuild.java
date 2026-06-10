@@ -167,7 +167,7 @@ public class TBuild {
 	// ══════════════════════════════════════════════════════════════════════════
 
 	private void createUI() {
-		frame = new JFrame("T-build 2.0");
+		frame = new JFrame("TBuild");
 		Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
 		frame.setSize(Math.max(1100, screen.width * 2 / 3), Math.max(700, screen.height * 2 / 3));
 		frame.setLocationRelativeTo(null);
@@ -210,7 +210,7 @@ public class TBuild {
 		root.add(split, BorderLayout.CENTER);
 
 		// Startup-Ausgaben
-		log("[INFO] T-build 2.0 bereit.\n", Color.LIGHT_GRAY);
+		log("[INFO] TBuild bereit.\n", Color.LIGHT_GRAY);
 		String[] creds = loadGitCredentials();
 		if (creds != null) log("[GIT]  Angemeldet als: " + creds[0] + "\n", new Color(255, 200, 80));
 		else log("[GIT]  Nicht angemeldet. Git → Anmelden für Push/Pull.\n", Color.ORANGE);
@@ -1346,7 +1346,7 @@ public class TBuild {
 					private boolean downloadFile(String urlStr, String target) {
 						try {
 							HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
-							conn.setRequestProperty("User-Agent", "TBuild/2.0");
+							conn.setRequestProperty("User-Agent", "TBuild");
 							conn.setConnectTimeout(10000);
 							conn.setReadTimeout(30000);
 							int code = conn.getResponseCode();
