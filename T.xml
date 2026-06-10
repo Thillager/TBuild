@@ -1,6 +1,6 @@
 <project>
   <mainClass>TBuild</mainClass>
   <appName>TBuild2</appName>
-  <version>2.0.0</version>
+  <version>2.2.0</version>
   <winUpgradeUuid>f3a1d2e4-7b5c-4890-ae23-1d9f6c3b8a72</winUpgradeUuid>
 </project>

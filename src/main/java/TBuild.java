@@ -553,6 +553,13 @@ public class TBuild {
     private List<String> buildRunCommand(String javaExe, String classpath, List<String> javafxJars) {
         List<String> cmd = new ArrayList<>();
         cmd.add(javaExe);
+        
+        // FIX FÜR JAVA 25/26: Erlaubt JavaFX den systemnahen Zugriff auf Windows-Grafikbibliotheken
+        cmd.add("--enable-native-access=javafx.graphics");
+        
+        // SOFTWARE-RENDERER FALLBACK: Nutzt die CPU zum Zeichnen, falls Direct3D blockiert wird
+        cmd.add("-Dprism.order=sw");
+        
         if (!javafxJars.isEmpty()) {
             String modulePath = String.join(File.pathSeparator, javafxJars);
             cmd.add("--module-path");
@@ -567,9 +574,30 @@ public class TBuild {
         cmd.add(getMainClass());
         return cmd;
     }
+    private List<String> buildRunCommand(String javaExe, String classpath, List<String> javafxJars) {
+        List<String> cmd = new ArrayList<>();
+        cmd.add(javaExe);
+        
+        // WICHTIG: Diese Parameter MÜSSEN ganz am Anfang stehen, direkt nach der java.exe!
+        cmd.add("--enable-native-access=javafx.graphics");
+        cmd.add("--add-modules=javafx.graphics");
+        
+        // Schaltet das Log für die Grafik-Pipeline ein, damit wir sehen, was Windows blockiert
+        cmd.add("-Dprism.verbose=true"); 
 
-    private List<String> buildRunCommand(String javaExe, String classpath) {
-        return buildRunCommand(javaExe, classpath, collectJavafxJars());
+        if (!javafxJars.isEmpty()) {
+            String modulePath = String.join(File.pathSeparator, javafxJars);
+            cmd.add("--module-path");
+            cmd.add(modulePath);
+            String detectedModules = detectJavafxModules(javafxJars);
+            cmd.add("--add-modules");
+            cmd.add(detectedModules);
+            log("[INFO] JavaFX erkannt. Module: " + detectedModules + "\n", Color.CYAN);
+        }
+        cmd.add("-cp");
+        cmd.add(classpath);
+        cmd.add(getMainClass());
+        return cmd;
     }
 
     private boolean isJavafxJar(String name) {
