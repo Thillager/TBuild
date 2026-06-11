@@ -224,27 +224,27 @@ public class TBuild {
 
 		// Gruppe: Projekt
 		bar.add(makeLabel("Projekt:"));
-		bar.add(btn("✦ Init",       e -> initDialog()));
-		bar.add(btn("⚙ Main-Kl.",   e -> setMainDialog()));
-		bar.add(btn("⚙ Version",    e -> setVersionDialog()));
-		bar.add(btn("⚙ Name",       e -> setNameDialog()));
-		bar.add(btn("⚙ UUID",       e -> uuidDialog()));
-		bar.add(btn("⚙ Params",     e -> customParamsDialog()));
+		bar.add(btn("Init",       e -> initDialog()));
+		bar.add(btn("Main-Kl.",   e -> setMainDialog()));
+		bar.add(btn("Version",    e -> setVersionDialog()));
+		bar.add(btn("Name",       e -> setNameDialog()));
+		bar.add(btn("UUID",       e -> uuidDialog()));
+		bar.add(btn("Params",     e -> customParamsDialog()));
 		bar.add(new JSeparator(JSeparator.VERTICAL));
 
 		// Gruppe: Build
 		bar.add(makeLabel("Build:"));
-		bar.add(btn("▶ Bauen+Run",  e -> new Thread(() -> executeBuild(true)).start()));
-		bar.add(btn("🔨 Nur Build",  e -> new Thread(() -> executeBuild(false)).start()));
-		bar.add(btn("🧪 Tests",      e -> new Thread(this::runTests).start()));
-		bar.add(btn("🗑 Konsole",    e -> { console.setText(""); testConsole.setText(""); }));
+		bar.add(btn("Bauen+Run",  e -> new Thread(() -> executeBuild(true)).start()));
+		bar.add(btn("Nur Build",  e -> new Thread(() -> executeBuild(false)).start()));
+		bar.add(btn("Tests",      e -> new Thread(this::runTests).start()));
+		bar.add(btn("Konsole",    e -> { console.setText(""); testConsole.setText(""); }));
 		bar.add(new JSeparator(JSeparator.VERTICAL));
 
 		// Gruppe: Export
 		bar.add(makeLabel("Export:"));
-		bar.add(btn("📦 Small JAR",  e -> exportDialog(false)));
-		bar.add(btn("📦 Fat JAR",    e -> exportDialog(true)));
-		bar.add(btn("💿 jpackage",   e -> jpackageDialog()));
+		bar.add(btn("Small JAR",  e -> exportDialog(false)));
+		bar.add(btn("Fat JAR",    e -> exportDialog(true)));
+		bar.add(btn("jpackage",   e -> jpackageDialog()));
 		bar.add(new JSeparator(JSeparator.VERTICAL));
 
 		// Gruppe: JavaFX
@@ -968,673 +968,621 @@ public class TBuild {
 			}
 			if (!javaOpts.isEmpty()) { cmd.add("--java-options"); cmd.add(String.join(" ", javaOpts)); }
 
-			// Platform-spezifisch
 			if (os.contains("win")) {
-				cmd.add("--win-upgrade-uuid"); cmd.add(getUpgradeUuid());
+				cmd.add("--win-upgrade-uuid");
+				cmd.add(getUpgradeUuid());
 				cmd.add("--win-shortcut");
 				cmd.add("--win-menu");
-				if (!needsTerminal) cmd.add("--win-console"); // GUI-App
-			} else if (!os.contains("mac")) {
-				cmd.add("--linux-shortcut");
-				cmd.add("--linux-app-category"); cmd.add("Application");
-				String pkg = appName.toLowerCase().replaceAll("[^a-z0-9-]", "-");
-				cmd.add("--linux-package-name"); cmd.add(pkg);
+				if (needsTerminal) cmd.add("--win-console"); // Nur Konsole anzeigen, wenn explizit gewünscht!
 			}
+		} else if (!os.contains("mac")) {
+			cmd.add("--linux-shortcut");
+			cmd.add("--linux-app-category"); cmd.add("Application");
+			String pkg = appName.toLowerCase().replaceAll("[^a-z0-9-]", "-");
+			cmd.add("--linux-package-name"); cmd.add(pkg);
+		}
 
-			// Custom jpackage-Argumente aus T.xml
-			String customJPkg = getCustomJPackageArgs();
-			if (!customJPkg.isEmpty()) {
-				for (String a : customJPkg.split("\\s+(?=--)")) {
-					String trimmed = a.trim();
-					if (!trimmed.isEmpty()) cmd.add(trimmed);
-				}
+		// Custom jpackage-Argumente aus T.xml
+		String customJPkg = getCustomJPackageArgs();
+		if (!customJPkg.isEmpty()) {
+			for (String a : customJPkg.split("\\s+(?=--)")) {
+				String trimmed = a.trim();
+				if (!trimmed.isEmpty()) cmd.add(trimmed);
 			}
+		}
 
-			log("[INFO] Befehl: " + String.join(" ", cmd) + "\n", Color.CYAN);
-			ProcessBuilder pb = new ProcessBuilder(cmd);
-			pb.redirectErrorStream(true);
-			Process proc = pb.start();
-			drainAsync(proc.getInputStream(), console).join(300_000);
-			int exit = proc.waitFor();
+		log("[INFO] Befehl: " + String.join(" ", cmd) + "\n", Color.CYAN);
+		ProcessBuilder pb = new ProcessBuilder(cmd);
+		pb.redirectErrorStream(true);
+		Process proc = pb.start();
+		drainAsync(proc.getInputStream(), console).join(300_000);
+		int exit = proc.waitFor();
 
-			if (exit != 0) {
-				log("[FEHLER] jpackage Exit-Code " + exit + ".\n", Color.RED);
-				log("[TIPP] Windows: WiX Toolset installieren → https://wixtoolset.org\n", Color.ORANGE);
-				log("[TIPP] Linux (deb): sudo apt install fakeroot\n", Color.ORANGE);
-				if (isCliMode) System.exit(1);
-				return;
-			}
-			if (distDir.listFiles() != null) for (File f : distDir.listFiles())
-			log("[ERFOLG] Installer: dist/" + f.getName() + "\n", Color.GREEN);
-		} catch (Exception e) {
-			log("[FEHLER] jpackage: " + e.getMessage() + "\n", Color.RED);
+		if (exit != 0) {
+			log("[FEHLER] jpackage Exit-Code " + exit + ".\n", Color.RED);
+			log("[TIPP] Windows: WiX Toolset installieren → https://wixtoolset.org\n", Color.ORANGE);
+			log("[TIPP] Linux (deb): sudo apt install fakeroot\n", Color.ORANGE);
 			if (isCliMode) System.exit(1);
+			return;
+		}
+		if (distDir.listFiles() != null) for (File f : distDir.listFiles())
+		log("[ERFOLG] Installer: dist/" + f.getName() + "\n", Color.GREEN);
+	} catch (Exception e) {
+		log("[FEHLER] jpackage: " + e.getMessage() + "\n", Color.RED);
+		if (isCliMode) System.exit(1);
+	}
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  BUILD HELPER
+// ══════════════════════════════════════════════════════════════════════════
+
+private List<String> collectJavafxJars() {
+	List<String> list = new ArrayList<>();
+	File lib = new File("libs");
+	if (lib.exists() && lib.listFiles() != null)
+	for (File f : lib.listFiles())
+	if (f.getName().endsWith(".jar") && isJavafxJar(f.getName()))
+	list.add(f.getAbsolutePath());
+	return list;
+}
+
+private boolean isJavafxJar(String name) {
+	String n = name.toLowerCase();
+	return n.startsWith("javafx-") || n.startsWith("javafx.");
+}
+
+private String detectJavafxModules(List<String> jars) {
+	List<String> mods = new ArrayList<>();
+	boolean hasBase = false;
+	for (String jar : jars) {
+		String n = new File(jar).getName().toLowerCase();
+		if ((n.contains("javafx-base") || n.contains("javafx.base")) && !hasBase) { mods.add("javafx.base"); hasBase = true; }
+		else if (n.contains("javafx-controls") || n.contains("javafx.controls")) mods.add("javafx.controls");
+		else if (n.contains("javafx-fxml")     || n.contains("javafx.fxml"))     mods.add("javafx.fxml");
+		else if (n.contains("javafx-graphics") || n.contains("javafx.graphics"))  mods.add("javafx.graphics");
+		else if (n.contains("javafx-media")    || n.contains("javafx.media"))     mods.add("javafx.media");
+		else if (n.contains("javafx-swing")    || n.contains("javafx.swing"))     mods.add("javafx.swing");
+		else if (n.contains("javafx-web")      || n.contains("javafx.web"))       mods.add("javafx.web");
+	}
+	if (!hasBase && !mods.isEmpty()) mods.add(0, "javafx.base");
+	if (mods.contains("javafx.controls") && !mods.contains("javafx.graphics")) mods.add(1, "javafx.graphics");
+	return mods.isEmpty() ? "javafx.controls" : String.join(",", mods);
+}
+
+private List<String> buildRunCommand(String javaExe, String classpath, List<String> javafxJars, boolean terminal) {
+	List<String> cmd = new ArrayList<>();
+	cmd.add(javaExe);
+	// Unterdrückt JVM-interne Warnungen (JDK 17+)
+	cmd.add("-Djava.util.logging.config.file=");
+	if (!javafxJars.isEmpty()) {
+		String mp   = String.join(File.pathSeparator, javafxJars);
+		String mods = detectJavafxModules(javafxJars);
+		cmd.add("--module-path"); cmd.add(mp);
+		cmd.add("--add-modules"); cmd.add(mods);
+		cmd.add("--enable-native-access=" + mods.split(",")[0]);
+		log("[INFO] JavaFX-Module: " + mods + "\n", Color.CYAN);
+	}
+	// Custom JVM-Params aus T.xml
+	String extra = getCustomRunParams();
+	if (!extra.isEmpty()) for (String p : extra.split("\\s+")) { String t = p.trim(); if (!t.isEmpty()) cmd.add(t); }
+	cmd.add("-cp"); cmd.add(classpath);
+	cmd.add(getMainClass());
+	return cmd;
+}
+
+private String buildClasspath() {
+	StringBuilder cp = new StringBuilder(new File("out").getAbsolutePath());
+	File lib = new File("libs");
+	if (lib.exists() && lib.listFiles() != null)
+	for (File f : lib.listFiles())
+	if (f.getName().endsWith(".jar")) cp.append(File.pathSeparator).append(f.getAbsolutePath());
+	return cp.toString();
+}
+
+private String getJavaExe() {
+	String home = System.getProperty("java.home");
+	if (home != null) {
+		for (String path : new String[]{
+				home + File.separator + "bin" + File.separator + "java",
+				home + File.separator + ".." + File.separator + "bin" + File.separator + "java"}) {
+			File f = new File(path);
+			if (f.exists()) { try { return f.getCanonicalPath(); } catch (IOException e) { return f.getAbsolutePath(); } }
+			File fw = new File(path + ".exe");
+			if (fw.exists()) { try { return fw.getCanonicalPath(); } catch (IOException e) { return fw.getAbsolutePath(); } }
 		}
 	}
+	return "java";
+}
 
-	// ══════════════════════════════════════════════════════════════════════════
-	//  BUILD HELPER
-	// ══════════════════════════════════════════════════════════════════════════
-
-	private List<String> collectJavafxJars() {
-		List<String> list = new ArrayList<>();
-		File lib = new File("libs");
-		if (lib.exists() && lib.listFiles() != null)
-		for (File f : lib.listFiles())
-		if (f.getName().endsWith(".jar") && isJavafxJar(f.getName()))
-		list.add(f.getAbsolutePath());
-		return list;
-	}
-
-	private boolean isJavafxJar(String name) {
-		String n = name.toLowerCase();
-		return n.startsWith("javafx-") || n.startsWith("javafx.");
-	}
-
-	private String detectJavafxModules(List<String> jars) {
-		List<String> mods = new ArrayList<>();
-		boolean hasBase = false;
-		for (String jar : jars) {
-			String n = new File(jar).getName().toLowerCase();
-			if ((n.contains("javafx-base") || n.contains("javafx.base")) && !hasBase) { mods.add("javafx.base"); hasBase = true; }
-			else if (n.contains("javafx-controls") || n.contains("javafx.controls")) mods.add("javafx.controls");
-			else if (n.contains("javafx-fxml")     || n.contains("javafx.fxml"))     mods.add("javafx.fxml");
-			else if (n.contains("javafx-graphics") || n.contains("javafx.graphics"))  mods.add("javafx.graphics");
-			else if (n.contains("javafx-media")    || n.contains("javafx.media"))     mods.add("javafx.media");
-			else if (n.contains("javafx-swing")    || n.contains("javafx.swing"))     mods.add("javafx.swing");
-			else if (n.contains("javafx-web")      || n.contains("javafx.web"))       mods.add("javafx.web");
+private String getJarExe() {
+	String home = System.getProperty("java.home");
+	if (home != null) {
+		for (String path : new String[]{
+				home + File.separator + "bin" + File.separator + "jar",
+				home + File.separator + ".." + File.separator + "bin" + File.separator + "jar"}) {
+			File f = new File(path); if (f.exists()) return f.getAbsolutePath();
+			File fw = new File(path + ".exe"); if (fw.exists()) return fw.getAbsolutePath();
 		}
-		if (!hasBase && !mods.isEmpty()) mods.add(0, "javafx.base");
-		if (mods.contains("javafx.controls") && !mods.contains("javafx.graphics")) mods.add(1, "javafx.graphics");
-		return mods.isEmpty() ? "javafx.controls" : String.join(",", mods);
 	}
+	return "jar";
+}
 
-	private List<String> buildRunCommand(String javaExe, String classpath, List<String> javafxJars, boolean terminal) {
-		List<String> cmd = new ArrayList<>();
-		cmd.add(javaExe);
-		// Unterdrückt JVM-interne Warnungen (JDK 17+)
-		cmd.add("-Djava.util.logging.config.file=");
-		if (!javafxJars.isEmpty()) {
-			String mp   = String.join(File.pathSeparator, javafxJars);
-			String mods = detectJavafxModules(javafxJars);
-			cmd.add("--module-path"); cmd.add(mp);
-			cmd.add("--add-modules"); cmd.add(mods);
-			cmd.add("--enable-native-access=" + mods.split(",")[0]);
-			log("[INFO] JavaFX-Module: " + mods + "\n", Color.CYAN);
+private String getJPackageExe() {
+	String home = System.getProperty("java.home");
+	if (home != null) {
+		for (String path : new String[]{
+				home + File.separator + "bin" + File.separator + "jpackage",
+				home + File.separator + ".." + File.separator + "bin" + File.separator + "jpackage"}) {
+			File f = new File(path); if (f.exists()) return f.getAbsolutePath();
+			File fw = new File(path + ".exe"); if (fw.exists()) return fw.getAbsolutePath();
 		}
-		// Custom JVM-Params aus T.xml
-		String extra = getCustomRunParams();
-		if (!extra.isEmpty()) for (String p : extra.split("\\s+")) { String t = p.trim(); if (!t.isEmpty()) cmd.add(t); }
-		cmd.add("-cp"); cmd.add(classpath);
-		cmd.add(getMainClass());
-		return cmd;
 	}
+	try { Process p = new ProcessBuilder("jpackage", "--version").start(); p.waitFor(); if (p.exitValue() == 0) return "jpackage"; } catch (Exception ignored) {}
+	return null;
+}
 
-	private String buildClasspath() {
-		StringBuilder cp = new StringBuilder(new File("out").getAbsolutePath());
-		File lib = new File("libs");
-		if (lib.exists() && lib.listFiles() != null)
-		for (File f : lib.listFiles())
-		if (f.getName().endsWith(".jar")) cp.append(File.pathSeparator).append(f.getAbsolutePath());
-		return cp.toString();
+// ══════════════════════════════════════════════════════════════════════════
+//  MAVEN SUCHE
+// ══════════════════════════════════════════════════════════════════════════
+
+private void searchLibraries() {
+	String q = searchField.getText().trim();
+	if (q.isEmpty()) return;
+	new Thread(() -> {
+			try {
+				SwingUtilities.invokeLater(() -> { resultModel.clear(); resultModel.addElement("Suche…"); });
+				String enc = URLEncoder.encode(q, StandardCharsets.UTF_8.name());
+				String url = "https://search.maven.org/solrsearch/select?q=a:" + enc + "+OR+" + enc + "&rows=30&wt=json";
+				String json = fetchUrl(url);
+				List<String> hits = new ArrayList<>();
+				Matcher m = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(json);
+				while (m.find()) hits.add(m.group(1));
+				SwingUtilities.invokeLater(() -> {
+						resultModel.clear();
+						if (hits.isEmpty()) resultModel.addElement("Keine Ergebnisse.");
+						else hits.forEach(resultModel::addElement);
+					});
+			} catch (Exception e) { log("[FEHLER] Suche: " + e.getMessage() + "\n", Color.RED); }
+		}, "maven-search").start();
+}
+
+private void showVersionDialog() {
+	String sel = resultList.getSelectedValue();
+	if (sel == null || sel.contains(" ")) return;
+	new Thread(() -> {
+			try {
+				String[] parts = sel.split(":");
+				if (parts.length < 2) return;
+				String url = "https://search.maven.org/solrsearch/select?q=g:%22" + parts[0] + "%22+AND+a:%22" + parts[1] + "%22&rows=40&core=gav&wt=json";
+				String json = fetchUrl(url);
+				List<String> versions = new ArrayList<>();
+				Matcher m = Pattern.compile("\"v\":\"([^\"]+)\"").matcher(json);
+				while (m.find()) versions.add(m.group(1));
+				if (versions.isEmpty()) { log("[WARN] Keine Versionen für " + sel + "\n", Color.ORANGE); return; }
+				SwingUtilities.invokeLater(() -> {
+						String choice = (String) JOptionPane.showInputDialog(frame, "Version für " + parts[1] + ":",
+							"Version wählen", JOptionPane.PLAIN_MESSAGE, null, versions.toArray(), versions.get(0));
+						if (choice != null) downloadAll(parts[0], parts[1], choice);
+					});
+			} catch (Exception e) { log("[FEHLER] Versionen: " + e.getMessage() + "\n", Color.RED); }
+		}, "version-fetch").start();
+}
+
+private String fetchUrl(String urlStr) throws Exception {
+	HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
+	conn.setRequestProperty("User-Agent", "TBuild/2.0");
+	conn.setConnectTimeout(8000);
+	conn.setReadTimeout(8000);
+	int code = conn.getResponseCode();
+	if (code != 200) throw new IOException("HTTP " + code);
+	try (BufferedReader r = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+		StringBuilder sb = new StringBuilder();
+		String line; while ((line = r.readLine()) != null) sb.append(line);
+		return sb.toString();
 	}
+}
 
-	private String getJavaExe() {
-		String home = System.getProperty("java.home");
-		if (home != null) {
-			for (String path : new String[]{
-					home + File.separator + "bin" + File.separator + "java",
-					home + File.separator + ".." + File.separator + "bin" + File.separator + "java"}) {
-				File f = new File(path);
-				if (f.exists()) { try { return f.getCanonicalPath(); } catch (IOException e) { return f.getAbsolutePath(); } }
-				File fw = new File(path + ".exe");
-				if (fw.exists()) { try { return fw.getCanonicalPath(); } catch (IOException e) { return fw.getAbsolutePath(); } }
-			}
-		}
-		return "java";
+// ══════════════════════════════════════════════════════════════════════════
+//  DEPENDENCY DOWNLOAD
+// ══════════════════════════════════════════════════════════════════════════
+
+private void downloadAll(String g, String a, String v) {
+	if (isCliMode) downloadAllBlocking(g, a, v);
+	else new Thread(() -> downloadAllBlocking(g, a, v), "dep-download").start();
+}
+
+private void downloadAllBlocking(String g, String a, String v) {
+	try {
+		pool = Executors.newFixedThreadPool(6, r -> { Thread t = new Thread(r); t.setDaemon(true); return t; });
+		downloaded.clear(); pomDownloadStarted.clear(); pomCache.clear(); activeDownloads.set(0);
+		log("[INFO] Auflösung starten: " + a + ":" + v + "\n", Color.CYAN);
+		resolve(g, a, v);
+		long deadline = System.currentTimeMillis() + 300_000;
+		while (activeDownloads.get() > 0 && System.currentTimeMillis() < deadline) Thread.sleep(200);
+		pool.shutdown();
+		if (!pool.awaitTermination(30, TimeUnit.SECONDS)) pool.shutdownNow();
+		log("[ERFOLG] Alle Abhängigkeiten geladen.\n", Color.GREEN);
+	} catch (Exception e) {
+		log("[FEHLER] Download: " + e.getMessage() + "\n", Color.RED);
+		if (pool != null && !pool.isShutdown()) pool.shutdownNow();
 	}
+}
 
-	private String getJarExe() {
-		String home = System.getProperty("java.home");
-		if (home != null) {
-			for (String path : new String[]{
-					home + File.separator + "bin" + File.separator + "jar",
-					home + File.separator + ".." + File.separator + "bin" + File.separator + "jar"}) {
-				File f = new File(path); if (f.exists()) return f.getAbsolutePath();
-				File fw = new File(path + ".exe"); if (fw.exists()) return fw.getAbsolutePath();
-			}
-		}
-		return "jar";
-	}
-
-	private String getJPackageExe() {
-		String home = System.getProperty("java.home");
-		if (home != null) {
-			for (String path : new String[]{
-					home + File.separator + "bin" + File.separator + "jpackage",
-					home + File.separator + ".." + File.separator + "bin" + File.separator + "jpackage"}) {
-				File f = new File(path); if (f.exists()) return f.getAbsolutePath();
-				File fw = new File(path + ".exe"); if (fw.exists()) return fw.getAbsolutePath();
-			}
-		}
-		try { Process p = new ProcessBuilder("jpackage", "--version").start(); p.waitFor(); if (p.exitValue() == 0) return "jpackage"; } catch (Exception ignored) {}
-		return null;
-	}
-
-	// ══════════════════════════════════════════════════════════════════════════
-	//  MAVEN SUCHE
-	// ══════════════════════════════════════════════════════════════════════════
-
-	private void searchLibraries() {
-		String q = searchField.getText().trim();
-		if (q.isEmpty()) return;
-		new Thread(() -> {
+private void resolve(String g, String a, String v) {
+	if (g == null || a == null || v == null || v.startsWith("${")) return;
+		String key = g + ":" + a + ":" + v;
+		if (!downloaded.add(key)) return;
+		activeDownloads.incrementAndGet();
+		pool.submit(() -> {
 				try {
-					SwingUtilities.invokeLater(() -> { resultModel.clear(); resultModel.addElement("Suche…"); });
-					String enc = URLEncoder.encode(q, StandardCharsets.UTF_8.name());
-					String url = "https://search.maven.org/solrsearch/select?q=a:" + enc + "+OR+" + enc + "&rows=30&wt=json";
-					String json = fetchUrl(url);
-					List<String> hits = new ArrayList<>();
-					Matcher m = Pattern.compile("\"id\":\"([^\"]+)\"").matcher(json);
-					while (m.find()) hits.add(m.group(1));
-					SwingUtilities.invokeLater(() -> {
-							resultModel.clear();
-							if (hits.isEmpty()) resultModel.addElement("Keine Ergebnisse.");
-							else hits.forEach(resultModel::addElement);
-						});
-				} catch (Exception e) { log("[FEHLER] Suche: " + e.getMessage() + "\n", Color.RED); }
-			}, "maven-search").start();
+					if (downloadPom(g, a, v)) {
+						PomData data = parsePom(g, a, v);
+						if (data != null) {
+							if (!"pom".equalsIgnoreCase(data.packaging)) downloadJar(g, a, v);
+							for (Dependency dep : data.dependencies) {
+								if ("test".equals(dep.scope) || "provided".equals(dep.scope) || "system".equals(dep.scope) || dep.optional) continue;
+								resolve(dep.groupId, dep.artifactId, dep.version);
+							}
+						}
+					}
+				} catch (Exception e) {
+					log("[WARN] " + key + ": " + e.getMessage() + "\n", Color.ORANGE);
+				} finally { activeDownloads.decrementAndGet(); }
+			});
 	}
 
-	private void showVersionDialog() {
-		String sel = resultList.getSelectedValue();
-		if (sel == null || sel.contains(" ")) return;
-		new Thread(() -> {
-				try {
-					String[] parts = sel.split(":");
-					if (parts.length < 2) return;
-					String url = "https://search.maven.org/solrsearch/select?q=g:%22" + parts[0] + "%22+AND+a:%22" + parts[1] + "%22&rows=40&core=gav&wt=json";
-					String json = fetchUrl(url);
-					List<String> versions = new ArrayList<>();
-					Matcher m = Pattern.compile("\"v\":\"([^\"]+)\"").matcher(json);
-					while (m.find()) versions.add(m.group(1));
-					if (versions.isEmpty()) { log("[WARN] Keine Versionen für " + sel + "\n", Color.ORANGE); return; }
-					SwingUtilities.invokeLater(() -> {
-							String choice = (String) JOptionPane.showInputDialog(frame, "Version für " + parts[1] + ":",
-								"Version wählen", JOptionPane.PLAIN_MESSAGE, null, versions.toArray(), versions.get(0));
-							if (choice != null) downloadAll(parts[0], parts[1], choice);
-						});
-				} catch (Exception e) { log("[FEHLER] Versionen: " + e.getMessage() + "\n", Color.RED); }
-			}, "version-fetch").start();
+	private PomData parsePom(String g, String a, String v) throws Exception {
+		String cacheKey = g + ":" + a + ":" + v;
+		if (pomCache.containsKey(cacheKey)) return pomCache.get(cacheKey);
+		File pomFile = new File("libs/" + a + "-" + v + ".pom");
+		if (!pomFile.exists()) return null;
+		Document doc;
+		try { doc = DBF.newDocumentBuilder().parse(pomFile); }
+		catch (Exception e) { log("[WARN] POM nicht parsbar: " + pomFile.getName() + "\n", Color.ORANGE); return null; }
+		Element root = doc.getDocumentElement();
+		PomData data = new PomData();
+		String pomG = direct(root, "groupId");
+		String pomV = direct(root, "version");
+		data.packaging = firstOrDefault(direct(root, "packaging"), "jar");
+		Element parentEl = child(root, "parent");
+		if (parentEl != null) {
+			String pg = tag(parentEl, "groupId"), pa = tag(parentEl, "artifactId"), pv = tag(parentEl, "version");
+			if (pg != null && pa != null && pv != null) {
+				downloadPom(pg, pa, pv);
+				PomData pd = parsePom(pg, pa, pv);
+				if (pd != null) { data.properties.putAll(pd.properties); data.managedVersions.putAll(pd.managedVersions); }
+			}
+			if (pomG == null && pg != null) data.properties.put("project.groupId", pg);
+			if (pomV == null && pv != null) data.properties.put("project.version", pv);
+		}
+		data.properties.putIfAbsent("project.groupId",    pomG != null ? pomG : g);
+		data.properties.putIfAbsent("project.version",    pomV != null ? pomV : v);
+		data.properties.put("project.artifactId", a);
+		data.properties.putIfAbsent("revision", v);
+		Element propsEl = child(root, "properties");
+		if (propsEl != null) {
+			NodeList kids = propsEl.getChildNodes();
+			for (int i = 0; i < kids.getLength(); i++) {
+				Node n = kids.item(i);
+				if (n.getNodeType() == Node.ELEMENT_NODE) data.properties.put(n.getNodeName(), n.getTextContent().trim());
+			}
+		}
+		Element dmEl = child(root, "dependencyManagement");
+		if (dmEl != null) {
+			Element depsEl = child(dmEl, "dependencies");
+			if (depsEl != null) parseDepsManagement(depsEl, data);
+		}
+		Element depsEl = child(root, "dependencies");
+		if (depsEl != null) parseDeps(depsEl, data);
+		pomCache.put(cacheKey, data);
+		return data;
 	}
 
-	private String fetchUrl(String urlStr) throws Exception {
-		HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
-		conn.setRequestProperty("User-Agent", "TBuild/2.0");
-		conn.setConnectTimeout(8000);
-		conn.setReadTimeout(8000);
-		int code = conn.getResponseCode();
-		if (code != 200) throw new IOException("HTTP " + code);
-		try (BufferedReader r = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
-			StringBuilder sb = new StringBuilder();
-			String line; while ((line = r.readLine()) != null) sb.append(line);
-			return sb.toString();
+	private void parseDepsManagement(Element el, PomData data) throws Exception {
+		NodeList nl = el.getChildNodes();
+		for (int i = 0; i < nl.getLength(); i++) {
+			Node n = nl.item(i);
+			if (n.getNodeType() != Node.ELEMENT_NODE || !"dependency".equals(n.getNodeName())) continue;
+			Element e = (Element) n;
+			String dg = rp(tag(e, "groupId"), data.properties);
+			String da = rp(tag(e, "artifactId"), data.properties);
+			String dv = rp(tag(e, "version"), data.properties);
+			String ds = rp(tag(e, "scope"), data.properties);
+			String dt = rp(tag(e, "type"), data.properties);
+			if ("import".equals(ds) && "pom".equalsIgnoreCase(dt) && valid(dg, da, dv)) {
+				downloadPom(dg, da, dv);
+				PomData bom = parsePom(dg, da, dv);
+				if (bom != null) bom.managedVersions.forEach(data.managedVersions::putIfAbsent);
+			} else if (valid(dg, da, dv)) {
+				data.managedVersions.put(dg + ":" + da, dv);
+			}
 		}
 	}
 
-	// ══════════════════════════════════════════════════════════════════════════
-	//  DEPENDENCY DOWNLOAD
-	// ══════════════════════════════════════════════════════════════════════════
+	private void parseDeps(Element el, PomData data) {
+		NodeList nl = el.getChildNodes();
+		for (int i = 0; i < nl.getLength(); i++) {
+			Node n = nl.item(i);
+			if (n.getNodeType() != Node.ELEMENT_NODE || !"dependency".equals(n.getNodeName())) continue;
+			Element e = (Element) n;
+			Dependency dep = new Dependency();
+			dep.groupId    = rp(tag(e, "groupId"),    data.properties);
+			dep.artifactId = rp(tag(e, "artifactId"), data.properties);
+			dep.version    = rp(tag(e, "version"),    data.properties);
+			dep.scope      = rp(tag(e, "scope"),      data.properties);
+			dep.optional   = "true".equalsIgnoreCase(rp(tag(e, "optional"), data.properties));
+			if ((dep.version == null || dep.version.startsWith("${")) && dep.groupId != null && dep.artifactId != null) {
+					String managed = data.managedVersions.get(dep.groupId + ":" + dep.artifactId);
+					if (managed != null && !managed.startsWith("${")) dep.version = managed;
+					}
+					if (dep.version != null && dep.version.startsWith("${")) dep.version = rp(dep.version, data.properties);
+						if (valid(dep.groupId, dep.artifactId, dep.version)) data.dependencies.add(dep);
+						else if (dep.groupId != null && dep.artifactId != null)
+						log("[WARN] Version nicht auflösbar: " + dep.groupId + ":" + dep.artifactId + "\n", Color.ORANGE);
+					}
+				}
 
-	private void downloadAll(String g, String a, String v) {
-		if (isCliMode) downloadAllBlocking(g, a, v);
-		else new Thread(() -> downloadAllBlocking(g, a, v), "dep-download").start();
-	}
+				private boolean downloadPom(String g, String a, String v) {
+					if (!valid(g, a, v)) return false;
+					new File("libs").mkdirs();
+					File dest = new File("libs/" + a + "-" + v + ".pom");
+					if (dest.exists() && dest.length() > 0) return true;
+					String key = g + ":" + a + ":" + v + ":pom";
+					if (!pomDownloadStarted.add(key)) {
+						for (int i = 0; i < 40; i++) { if (dest.exists() && dest.length() > 0) return true; try { Thread.sleep(250); } catch (InterruptedException ignored) {} }
+						return dest.exists() && dest.length() > 0;
+					}
+					return downloadFile("https://repo1.maven.org/maven2/" + g.replace(".", "/") + "/" + a + "/" + v + "/" + a + "-" + v + ".pom", dest.getPath());
+				}
 
-	private void downloadAllBlocking(String g, String a, String v) {
-		try {
-			pool = Executors.newFixedThreadPool(6, r -> { Thread t = new Thread(r); t.setDaemon(true); return t; });
-			downloaded.clear(); pomDownloadStarted.clear(); pomCache.clear(); activeDownloads.set(0);
-			log("[INFO] Auflösung starten: " + a + ":" + v + "\n", Color.CYAN);
-			resolve(g, a, v);
-			long deadline = System.currentTimeMillis() + 300_000;
-			while (activeDownloads.get() > 0 && System.currentTimeMillis() < deadline) Thread.sleep(200);
-			pool.shutdown();
-			if (!pool.awaitTermination(30, TimeUnit.SECONDS)) pool.shutdownNow();
-			log("[ERFOLG] Alle Abhängigkeiten geladen.\n", Color.GREEN);
-		} catch (Exception e) {
-			log("[FEHLER] Download: " + e.getMessage() + "\n", Color.RED);
-			if (pool != null && !pool.isShutdown()) pool.shutdownNow();
-		}
-	}
+				private boolean downloadJar(String g, String a, String v) {
+					if (!valid(g, a, v)) return false;
+					new File("libs").mkdirs();
+					File dest = new File("libs/" + a + "-" + v + ".jar");
+					if (dest.exists() && dest.length() > 0) return true;
+					return downloadFile("https://repo1.maven.org/maven2/" + g.replace(".", "/") + "/" + a + "/" + v + "/" + a + "-" + v + ".jar", dest.getPath());
+				}
 
-	private void resolve(String g, String a, String v) {
-		if (g == null || a == null || v == null || v.startsWith("${")) return;
-			String key = g + ":" + a + ":" + v;
-			if (!downloaded.add(key)) return;
-			activeDownloads.incrementAndGet();
-			pool.submit(() -> {
+				private boolean downloadFile(String urlStr, String target) {
 					try {
-						if (downloadPom(g, a, v)) {
-							PomData data = parsePom(g, a, v);
-							if (data != null) {
-								if (!"pom".equalsIgnoreCase(data.packaging)) downloadJar(g, a, v);
-								for (Dependency dep : data.dependencies) {
-									if ("test".equals(dep.scope) || "provided".equals(dep.scope) || "system".equals(dep.scope) || dep.optional) continue;
-									resolve(dep.groupId, dep.artifactId, dep.version);
-								}
-							}
-						}
+						HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
+						conn.setRequestProperty("User-Agent", "TBuild");
+						conn.setConnectTimeout(10000);
+						conn.setReadTimeout(30000);
+						int code = conn.getResponseCode();
+						if (code == 404) return false;
+						if (code != 200) { log("[WARN] HTTP " + code + " – " + new File(target).getName() + "\n", Color.ORANGE); return false; }
+						log("[↓] " + new File(target).getName() + "\n", Color.GRAY);
+						Path tmp = Paths.get(target + ".tmp");
+						try (InputStream in = conn.getInputStream()) { Files.copy(in, tmp, StandardCopyOption.REPLACE_EXISTING); }
+						Files.move(tmp, Paths.get(target), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+						log("[URL] " + urlStr + "\n", Color.GRAY);
+						return true;
 					} catch (Exception e) {
-						log("[WARN] " + key + ": " + e.getMessage() + "\n", Color.ORANGE);
-					} finally { activeDownloads.decrementAndGet(); }
-				});
-		}
-
-		private PomData parsePom(String g, String a, String v) throws Exception {
-			String cacheKey = g + ":" + a + ":" + v;
-			if (pomCache.containsKey(cacheKey)) return pomCache.get(cacheKey);
-			File pomFile = new File("libs/" + a + "-" + v + ".pom");
-			if (!pomFile.exists()) return null;
-			Document doc;
-			try { doc = DBF.newDocumentBuilder().parse(pomFile); }
-			catch (Exception e) { log("[WARN] POM nicht parsbar: " + pomFile.getName() + "\n", Color.ORANGE); return null; }
-			Element root = doc.getDocumentElement();
-			PomData data = new PomData();
-			String pomG = direct(root, "groupId");
-			String pomV = direct(root, "version");
-			data.packaging = firstOrDefault(direct(root, "packaging"), "jar");
-			Element parentEl = child(root, "parent");
-			if (parentEl != null) {
-				String pg = tag(parentEl, "groupId"), pa = tag(parentEl, "artifactId"), pv = tag(parentEl, "version");
-				if (pg != null && pa != null && pv != null) {
-					downloadPom(pg, pa, pv);
-					PomData pd = parsePom(pg, pa, pv);
-					if (pd != null) { data.properties.putAll(pd.properties); data.managedVersions.putAll(pd.managedVersions); }
+						try { Files.deleteIfExists(Paths.get(target + ".tmp")); } catch (IOException ignored) {}
+						return false;
+					}
 				}
-				if (pomG == null && pg != null) data.properties.put("project.groupId", pg);
-				if (pomV == null && pv != null) data.properties.put("project.version", pv);
-			}
-			data.properties.putIfAbsent("project.groupId",    pomG != null ? pomG : g);
-			data.properties.putIfAbsent("project.version",    pomV != null ? pomV : v);
-			data.properties.put("project.artifactId", a);
-			data.properties.putIfAbsent("revision", v);
-			Element propsEl = child(root, "properties");
-			if (propsEl != null) {
-				NodeList kids = propsEl.getChildNodes();
-				for (int i = 0; i < kids.getLength(); i++) {
-					Node n = kids.item(i);
-					if (n.getNodeType() == Node.ELEMENT_NODE) data.properties.put(n.getNodeName(), n.getTextContent().trim());
+
+				// ══════════════════════════════════════════════════════════════════════════
+				//  CONFIG (T.xml)
+				// ══════════════════════════════════════════════════════════════════════════
+
+				private String getMainClass()    { return readXml("mainClass", "Main"); }
+				private String getAppName()      { String n = readXml("appName", ""); return n.isEmpty() ? deriveAppName() : n; }
+				private String getVersion()      { return readXml("version", "1.0.0"); }
+				private String getUpgradeUuid()  { return readXml("winUpgradeUuid", DEFAULT_UUID); }
+				private String getCustomRunParams()     { return readXml("customRunParams", ""); }
+				private String getCustomJPackageParams(){ return readXml("customJPackageParams", ""); }
+				private String getCustomJPackageArgs()  { return readXml("customJPackageArgs", ""); }
+
+				private String deriveAppName() { String mc = getMainClass(); int d = mc.lastIndexOf('.'); return d >= 0 ? mc.substring(d + 1) : mc; }
+
+				private String readXml(String tag, String fallback) {
+					try {
+						File f = new File("T.xml");
+						if (!f.exists()) return fallback;
+						Document doc = DBF.newDocumentBuilder().parse(f);
+						NodeList nl = doc.getElementsByTagName(tag);
+						if (nl.getLength() > 0) { String v = nl.item(0).getTextContent().trim(); if (!v.isEmpty()) return v; }
+					} catch (Exception ignored) {}
+					return fallback;
 				}
-			}
-			Element dmEl = child(root, "dependencyManagement");
-			if (dmEl != null) {
-				Element depsEl = child(dmEl, "dependencies");
-				if (depsEl != null) parseDepsManagement(depsEl, data);
-			}
-			Element depsEl = child(root, "dependencies");
-			if (depsEl != null) parseDeps(depsEl, data);
-			pomCache.put(cacheKey, data);
-			return data;
-		}
 
-		private void parseDepsManagement(Element el, PomData data) throws Exception {
-			NodeList nl = el.getChildNodes();
-			for (int i = 0; i < nl.getLength(); i++) {
-				Node n = nl.item(i);
-				if (n.getNodeType() != Node.ELEMENT_NODE || !"dependency".equals(n.getNodeName())) continue;
-				Element e = (Element) n;
-				String dg = rp(tag(e, "groupId"), data.properties);
-				String da = rp(tag(e, "artifactId"), data.properties);
-				String dv = rp(tag(e, "version"), data.properties);
-				String ds = rp(tag(e, "scope"), data.properties);
-				String dt = rp(tag(e, "type"), data.properties);
-				if ("import".equals(ds) && "pom".equalsIgnoreCase(dt) && valid(dg, da, dv)) {
-					downloadPom(dg, da, dv);
-					PomData bom = parsePom(dg, da, dv);
-					if (bom != null) bom.managedVersions.forEach(data.managedVersions::putIfAbsent);
-				} else if (valid(dg, da, dv)) {
-					data.managedVersions.put(dg + ":" + da, dv);
+				private void saveConfig(String mc, String appName, String version) {
+					saveFullConfig(mc, appName, version, getUpgradeUuid(), getCustomRunParams(), getCustomJPackageParams(), getCustomJPackageArgs());
 				}
-			}
-		}
 
-		private void parseDeps(Element el, PomData data) {
-			NodeList nl = el.getChildNodes();
-			for (int i = 0; i < nl.getLength(); i++) {
-				Node n = nl.item(i);
-				if (n.getNodeType() != Node.ELEMENT_NODE || !"dependency".equals(n.getNodeName())) continue;
-				Element e = (Element) n;
-				Dependency dep = new Dependency();
-				dep.groupId    = rp(tag(e, "groupId"),    data.properties);
-				dep.artifactId = rp(tag(e, "artifactId"), data.properties);
-				dep.version    = rp(tag(e, "version"),    data.properties);
-				dep.scope      = rp(tag(e, "scope"),      data.properties);
-				dep.optional   = "true".equalsIgnoreCase(rp(tag(e, "optional"), data.properties));
-				if ((dep.version == null || dep.version.startsWith("${")) && dep.groupId != null && dep.artifactId != null) {
-						String managed = data.managedVersions.get(dep.groupId + ":" + dep.artifactId);
-						if (managed != null && !managed.startsWith("${")) dep.version = managed;
-						}
-						if (dep.version != null && dep.version.startsWith("${")) dep.version = rp(dep.version, data.properties);
-							if (valid(dep.groupId, dep.artifactId, dep.version)) data.dependencies.add(dep);
-							else if (dep.groupId != null && dep.artifactId != null)
-							log("[WARN] Version nicht auflösbar: " + dep.groupId + ":" + dep.artifactId + "\n", Color.ORANGE);
-						}
+				private void saveFullConfig(String mc, String appName, String version, String uuid,
+					String runParams, String jpackageParams, String jpackageArgs) {
+					try (PrintWriter pw = new PrintWriter("T.xml", StandardCharsets.UTF_8)) {
+						pw.println("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+						pw.println("<project>");
+						pw.println("  <mainClass>"         + esc(mc)             + "</mainClass>");
+						pw.println("  <appName>"            + esc(appName)        + "</appName>");
+						pw.println("  <version>"            + esc(version)        + "</version>");
+						pw.println("  <winUpgradeUuid>"     + esc(uuid)           + "</winUpgradeUuid>");
+						pw.println("  <customRunParams>"    + esc(runParams)      + "</customRunParams>");
+						pw.println("  <customJPackageParams>" + esc(jpackageParams) + "</customJPackageParams>");
+						pw.println("  <customJPackageArgs>" + esc(jpackageArgs)   + "</customJPackageArgs>");
+						pw.println("</project>");
+					} catch (Exception e) { log("[FEHLER] T.xml speichern: " + e.getMessage() + "\n", Color.RED); }
+				}
+
+				private String esc(String s) {
+					if (s == null) return "";
+					return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;");
+				}
+
+				// ══════════════════════════════════════════════════════════════════════════
+				//  CONFIG-DIALOGE
+				// ══════════════════════════════════════════════════════════════════════════
+
+				private void setMainDialog() {
+					String v = (String) JOptionPane.showInputDialog(frame, "Main-Klasse (z.B. de.pkg.Main):", "Main-Klasse", JOptionPane.PLAIN_MESSAGE, null, null, getMainClass());
+					if (v != null && !v.isBlank()) { saveConfig(v.trim(), getAppName(), getVersion()); log("[INFO] Main-Klasse: " + v.trim() + "\n", Color.LIGHT_GRAY); }
+				}
+
+				private void setVersionDialog() {
+					String v = (String) JOptionPane.showInputDialog(frame, "Version (z.B. 1.2.0):", "Version", JOptionPane.PLAIN_MESSAGE, null, null, getVersion());
+					if (v != null && !v.isBlank()) { saveConfig(getMainClass(), getAppName(), v.trim()); log("[INFO] Version: " + v.trim() + "\n", Color.LIGHT_GRAY); }
+				}
+
+				private void setNameDialog() {
+					String v = (String) JOptionPane.showInputDialog(frame, "App-Name:", "Name", JOptionPane.PLAIN_MESSAGE, null, null, getAppName());
+					if (v != null && !v.isBlank()) { saveConfig(getMainClass(), v.trim(), getVersion()); log("[INFO] Name: " + v.trim() + "\n", Color.LIGHT_GRAY); }
+				}
+
+				private void uuidDialog() {
+					JPanel p = new JPanel(new GridLayout(0, 1, 0, 6));
+					JTextField field = new JTextField(getUpgradeUuid(), 40);
+					p.add(new JLabel("Windows MSI Upgrade-UUID:"));
+					p.add(field);
+					JButton gen = new JButton("🎲 Neue UUID generieren");
+					gen.addActionListener(e -> field.setText(java.util.UUID.randomUUID().toString()));
+					p.add(gen);
+					int r = JOptionPane.showConfirmDialog(frame, p, "UUID festlegen", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+					if (r == JOptionPane.OK_OPTION && !field.getText().isBlank()) {
+						saveFullConfig(getMainClass(), getAppName(), getVersion(), field.getText().trim(),
+							getCustomRunParams(), getCustomJPackageParams(), getCustomJPackageArgs());
+						log("[INFO] UUID: " + field.getText().trim() + "\n", Color.LIGHT_GRAY);
 					}
+				}
 
-					private boolean downloadPom(String g, String a, String v) {
-						if (!valid(g, a, v)) return false;
-						new File("libs").mkdirs();
-						File dest = new File("libs/" + a + "-" + v + ".pom");
-						if (dest.exists() && dest.length() > 0) return true;
-						String key = g + ":" + a + ":" + v + ":pom";
-						if (!pomDownloadStarted.add(key)) {
-							for (int i = 0; i < 40; i++) { if (dest.exists() && dest.length() > 0) return true; try { Thread.sleep(250); } catch (InterruptedException ignored) {} }
-							return dest.exists() && dest.length() > 0;
-						}
-						return downloadFile("https://repo1.maven.org/maven2/" + g.replace(".", "/") + "/" + a + "/" + v + "/" + a + "-" + v + ".pom", dest.getPath());
+				private void customParamsDialog() {
+					JPanel p = new JPanel(new GridLayout(0, 1, 0, 6));
+					JTextField runField    = new JTextField(getCustomRunParams(), 50);
+					JTextField jpField     = new JTextField(getCustomJPackageParams(), 50);
+					JTextField jpArgsField = new JTextField(getCustomJPackageArgs(), 50);
+					p.add(new JLabel("Custom JVM-Argumente beim Starten (z.B. -Xmx512m -Dfoo=bar):"));
+					p.add(runField);
+					p.add(new JLabel("Custom --java-options für jpackage:"));
+					p.add(jpField);
+					p.add(new JLabel("Custom jpackage-Argumente (z.B. --win-dir-chooser --resource-dir img):"));
+					p.add(jpArgsField);
+					int r = JOptionPane.showConfirmDialog(frame, p, "Custom Parameter", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+					if (r == JOptionPane.OK_OPTION) {
+						saveFullConfig(getMainClass(), getAppName(), getVersion(), getUpgradeUuid(),
+							runField.getText().trim(), jpField.getText().trim(), jpArgsField.getText().trim());
+						log("[INFO] Custom-Parameter gespeichert.\n", Color.LIGHT_GRAY);
 					}
+				}
 
-					private boolean downloadJar(String g, String a, String v) {
-						if (!valid(g, a, v)) return false;
-						new File("libs").mkdirs();
-						File dest = new File("libs/" + a + "-" + v + ".jar");
-						if (dest.exists() && dest.length() > 0) return true;
-						return downloadFile("https://repo1.maven.org/maven2/" + g.replace(".", "/") + "/" + a + "/" + v + "/" + a + "-" + v + ".jar", dest.getPath());
-					}
+				// ══════════════════════════════════════════════════════════════════════════
+				//  HELPER
+				// ══════════════════════════════════════════════════════════════════════════
 
-					private boolean downloadFile(String urlStr, String target) {
-						try {
-							HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
-							conn.setRequestProperty("User-Agent", "TBuild");
-							conn.setConnectTimeout(10000);
-							conn.setReadTimeout(30000);
-							int code = conn.getResponseCode();
-							if (code == 404) return false;
-							if (code != 200) { log("[WARN] HTTP " + code + " – " + new File(target).getName() + "\n", Color.ORANGE); return false; }
-							log("[↓] " + new File(target).getName() + "\n", Color.GRAY);
-							Path tmp = Paths.get(target + ".tmp");
-							try (InputStream in = conn.getInputStream()) { Files.copy(in, tmp, StandardCopyOption.REPLACE_EXISTING); }
-							Files.move(tmp, Paths.get(target), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-							log("[URL] " + urlStr + "\n", Color.GRAY);
-							return true;
-						} catch (Exception e) {
-							try { Files.deleteIfExists(Paths.get(target + ".tmp")); } catch (IOException ignored) {}
-							return false;
-						}
-					}
-
-					// ══════════════════════════════════════════════════════════════════════════
-					//  CONFIG (T.xml)
-					// ══════════════════════════════════════════════════════════════════════════
-
-					private String getMainClass()    { return readXml("mainClass", "Main"); }
-					private String getAppName()      { String n = readXml("appName", ""); return n.isEmpty() ? deriveAppName() : n; }
-					private String getVersion()      { return readXml("version", "1.0.0"); }
-					private String getUpgradeUuid()  { return readXml("winUpgradeUuid", DEFAULT_UUID); }
-					private String getCustomRunParams()     { return readXml("customRunParams", ""); }
-					private String getCustomJPackageParams(){ return readXml("customJPackageParams", ""); }
-					private String getCustomJPackageArgs()  { return readXml("customJPackageArgs", ""); }
-
-					private String deriveAppName() { String mc = getMainClass(); int d = mc.lastIndexOf('.'); return d >= 0 ? mc.substring(d + 1) : mc; }
-
-					private String readXml(String tag, String fallback) {
-						try {
-							File f = new File("T.xml");
-							if (!f.exists()) return fallback;
-							Document doc = DBF.newDocumentBuilder().parse(f);
-							NodeList nl = doc.getElementsByTagName(tag);
-							if (nl.getLength() > 0) { String v = nl.item(0).getTextContent().trim(); if (!v.isEmpty()) return v; }
-						} catch (Exception ignored) {}
-						return fallback;
-					}
-
-					private void saveConfig(String mc, String appName, String version) {
-						saveFullConfig(mc, appName, version, getUpgradeUuid(), getCustomRunParams(), getCustomJPackageParams(), getCustomJPackageArgs());
-					}
-
-					private void saveFullConfig(String mc, String appName, String version, String uuid,
-						String runParams, String jpackageParams, String jpackageArgs) {
-						try (PrintWriter pw = new PrintWriter("T.xml", StandardCharsets.UTF_8)) {
-							pw.println("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
-							pw.println("<project>");
-							pw.println("  <mainClass>"         + esc(mc)             + "</mainClass>");
-							pw.println("  <appName>"            + esc(appName)        + "</appName>");
-							pw.println("  <version>"            + esc(version)        + "</version>");
-							pw.println("  <winUpgradeUuid>"     + esc(uuid)           + "</winUpgradeUuid>");
-							pw.println("  <customRunParams>"    + esc(runParams)      + "</customRunParams>");
-							pw.println("  <customJPackageParams>" + esc(jpackageParams) + "</customJPackageParams>");
-							pw.println("  <customJPackageArgs>" + esc(jpackageArgs)   + "</customJPackageArgs>");
-							pw.println("</project>");
-						} catch (Exception e) { log("[FEHLER] T.xml speichern: " + e.getMessage() + "\n", Color.RED); }
-					}
-
-					private String esc(String s) {
-						if (s == null) return "";
-						return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;");
-					}
-
-					// ══════════════════════════════════════════════════════════════════════════
-					//  CONFIG-DIALOGE
-					// ══════════════════════════════════════════════════════════════════════════
-
-					private void setMainDialog() {
-						String v = (String) JOptionPane.showInputDialog(frame, "Main-Klasse (z.B. de.pkg.Main):", "Main-Klasse", JOptionPane.PLAIN_MESSAGE, null, null, getMainClass());
-						if (v != null && !v.isBlank()) { saveConfig(v.trim(), getAppName(), getVersion()); log("[INFO] Main-Klasse: " + v.trim() + "\n", Color.LIGHT_GRAY); }
-					}
-
-					private void setVersionDialog() {
-						String v = (String) JOptionPane.showInputDialog(frame, "Version (z.B. 1.2.0):", "Version", JOptionPane.PLAIN_MESSAGE, null, null, getVersion());
-						if (v != null && !v.isBlank()) { saveConfig(getMainClass(), getAppName(), v.trim()); log("[INFO] Version: " + v.trim() + "\n", Color.LIGHT_GRAY); }
-					}
-
-					private void setNameDialog() {
-						String v = (String) JOptionPane.showInputDialog(frame, "App-Name:", "Name", JOptionPane.PLAIN_MESSAGE, null, null, getAppName());
-						if (v != null && !v.isBlank()) { saveConfig(getMainClass(), v.trim(), getVersion()); log("[INFO] Name: " + v.trim() + "\n", Color.LIGHT_GRAY); }
-					}
-
-					private void uuidDialog() {
-						JPanel p = new JPanel(new GridLayout(0, 1, 0, 6));
-						JTextField field = new JTextField(getUpgradeUuid(), 40);
-						p.add(new JLabel("Windows MSI Upgrade-UUID:"));
-						p.add(field);
-						JButton gen = new JButton("🎲 Neue UUID generieren");
-						gen.addActionListener(e -> field.setText(java.util.UUID.randomUUID().toString()));
-						p.add(gen);
-						int r = JOptionPane.showConfirmDialog(frame, p, "UUID festlegen", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-						if (r == JOptionPane.OK_OPTION && !field.getText().isBlank()) {
-							saveFullConfig(getMainClass(), getAppName(), getVersion(), field.getText().trim(),
-								getCustomRunParams(), getCustomJPackageParams(), getCustomJPackageArgs());
-							log("[INFO] UUID: " + field.getText().trim() + "\n", Color.LIGHT_GRAY);
-						}
-					}
-
-					private void customParamsDialog() {
-						JPanel p = new JPanel(new GridLayout(0, 1, 0, 6));
-						JTextField runField    = new JTextField(getCustomRunParams(), 50);
-						JTextField jpField     = new JTextField(getCustomJPackageParams(), 50);
-						JTextField jpArgsField = new JTextField(getCustomJPackageArgs(), 50);
-						p.add(new JLabel("Custom JVM-Argumente beim Starten (z.B. -Xmx512m -Dfoo=bar):"));
-						p.add(runField);
-						p.add(new JLabel("Custom --java-options für jpackage:"));
-						p.add(jpField);
-						p.add(new JLabel("Custom jpackage-Argumente (z.B. --win-dir-chooser --resource-dir img):"));
-						p.add(jpArgsField);
-						int r = JOptionPane.showConfirmDialog(frame, p, "Custom Parameter", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-						if (r == JOptionPane.OK_OPTION) {
-							saveFullConfig(getMainClass(), getAppName(), getVersion(), getUpgradeUuid(),
-								runField.getText().trim(), jpField.getText().trim(), jpArgsField.getText().trim());
-							log("[INFO] Custom-Parameter gespeichert.\n", Color.LIGHT_GRAY);
-						}
-					}
-
-					// ══════════════════════════════════════════════════════════════════════════
-					//  HELPER
-					// ══════════════════════════════════════════════════════════════════════════
-
-					private Thread drainAsync(InputStream is, JTextPane target) {
-						Thread t = new Thread(() -> {
-								try (BufferedReader r = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-									String line;
-									while ((line = r.readLine()) != null) {
-										final String l = line;
-										if (isCliMode) System.out.println(l);
-										else SwingUtilities.invokeLater(() -> appendToPane(target, l + "\n", Color.LIGHT_GRAY));
-									}
-								} catch (IOException ignored) {}
-							});
-						t.setDaemon(true);
-						t.start();
-						return t;
-					}
-
-					private void stripModuleInfo(File dir) {
-						try {
-							Files.walk(dir.toPath()).filter(p -> {
-									String path = p.toString().replace("\\", "/");
-									String name = p.getFileName().toString().toUpperCase();
-									if (name.equals("MODULE-INFO.CLASS")) return true;
-									if (path.contains("META-INF/versions/")) return true;
-									if (path.contains("META-INF/") && !p.toFile().isDirectory())
-									return name.endsWith(".SF") || name.endsWith(".RSA") || name.endsWith(".DSA") || name.endsWith(".EC");
-									return false;
-								}).forEach(p -> { try { Files.deleteIfExists(p); } catch (IOException ignored) {} });
-							// Leere META-INF/versions aufräumen
-							Files.walk(dir.toPath())
-							.filter(p -> p.toString().replace("\\", "/").contains("META-INF/versions") && p.toFile().isDirectory())
-							.sorted(Comparator.reverseOrder())
-							.forEach(p -> { try { if (Objects.requireNonNull(p.toFile().list()).length == 0) Files.deleteIfExists(p); } catch (Exception ignored) {} });
-						} catch (IOException e) { log("[WARN] Metadaten-Bereinigung: " + e.getMessage() + "\n", Color.ORANGE); }
-					}
-
-					private void deleteDirectory(File dir) throws IOException {
-						if (dir.exists()) Files.walk(dir.toPath()).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
-					}
-
-					private void copyDirectory(File src, File dst) throws IOException {
-						Path s = src.toPath(), d = dst.toPath();
-						Files.walk(s).forEach(n -> {
-								try {
-									Path t = d.resolve(s.relativize(n));
-									if (Files.isDirectory(n)) Files.createDirectories(t);
-									else Files.copy(n, t, StandardCopyOption.REPLACE_EXISTING);
-								} catch (IOException e) { throw new RuntimeException(e); }
-							});
-					}
-
-					private List<File> listFiles(File dir) {
-						File[] arr = dir.listFiles();
-						return arr != null ? Arrays.asList(arr) : Collections.emptyList();
-					}
-
-					// POM XML Helpers
-					private Element child(Element p, String name) {
-						if (p == null) return null;
-						NodeList nl = p.getChildNodes();
-						for (int i = 0; i < nl.getLength(); i++) { Node n = nl.item(i); if (n.getNodeType() == Node.ELEMENT_NODE && name.equals(n.getNodeName())) return (Element) n; }
-						return null;
-					}
-					private String direct(Element p, String name) {
-						NodeList nl = p.getChildNodes();
-						for (int i = 0; i < nl.getLength(); i++) { Node n = nl.item(i); if (n.getNodeType() == Node.ELEMENT_NODE && name.equals(n.getNodeName())) return n.getTextContent().trim(); }
-						return null;
-					}
-					private String tag(Element p, String name) { Element c = child(p, name); return c != null ? c.getTextContent().trim() : null; }
-					private boolean valid(String g, String a, String v) { return g != null && a != null && v != null && !v.startsWith("${"); }
-						private String firstOrDefault(String v, String def) { return (v != null && !v.isEmpty()) ? v : def; }
-
-						private String rp(String val, Map<String, String> props) { return rp(val, props, 0); }
-						private String rp(String val, Map<String, String> props, int depth) {
-							if (val == null || depth > 10) return val;
-							if (val.startsWith("${") && val.endsWith("}")) {
-								String key = val.substring(2, val.length() - 1);
-								String r = props.get(key);
-								return (r != null && !r.equals(val)) ? rp(r, props, depth + 1) : val;
-							}
-							Matcher m = Pattern.compile("\\$\\{([^}]+)\\}").matcher(val);
-						if (!m.find()) return val;
-						StringBuffer sb = new StringBuffer(); m.reset();
-						while (m.find()) m.appendReplacement(sb, Matcher.quoteReplacement(props.getOrDefault(m.group(1), m.group(0))));
-						m.appendTail(sb);
-						String res = sb.toString();
-						return res.contains("${") && depth < 10 ? rp(res, props, depth + 1) : res;
-						}
-
-						// ══════════════════════════════════════════════════════════════════════════
-						//  DATA CLASSES
-						// ══════════════════════════════════════════════════════════════════════════
-
-						private static class PomData {
-							String packaging = "jar";
-							final Map<String, String> properties      = new HashMap<>();
-							final Map<String, String> managedVersions = new HashMap<>();
-							final List<Dependency>    dependencies    = new ArrayList<>();
-						}
-
-						private static class Dependency {
-							String groupId, artifactId, version, scope;
-							boolean optional;
-						}
-
-						// ══════════════════════════════════════════════════════════════════════════
-						//  GIT CREDENTIALS
-						// ══════════════════════════════════════════════════════════════════════════
-
-						private String[] loadGitCredentials() {
-							if (GIT_CREDS.exists()) {
-								try {
-									for (String line : Files.readAllLines(GIT_CREDS.toPath())) {
-										line = line.trim();
-										if (line.contains("github.com") && line.startsWith("https://")) {
-											String part = line.substring(8); int at = part.lastIndexOf('@');
-											if (at > 0) { String up = part.substring(0, at); int col = up.indexOf(':');
-												if (col > 0) return new String[]{up.substring(0, col), up.substring(col + 1)}; }
-										}
-									}
-								} catch (IOException ignored) {}
-							}
-							try {
-								Process p = new ProcessBuilder("git", "credential", "fill").redirectErrorStream(true).start();
-								p.getOutputStream().write("protocol=https\nhost=github.com\n\n".getBytes());
-								p.getOutputStream().flush(); p.getOutputStream().close();
-								String out = new String(p.getInputStream().readAllBytes()).trim();
-								p.waitFor(3, TimeUnit.SECONDS);
-								String user = null, pass = null;
-								for (String l : out.split("[\r\n]+")) {
-									if (l.startsWith("username=")) user = l.substring(9).trim();
-									if (l.startsWith("password=")) pass = l.substring(9).trim();
+				private Thread drainAsync(InputStream is, JTextPane target) {
+					Thread t = new Thread(() -> {
+							try (BufferedReader r = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+								String line;
+								while ((line = r.readLine()) != null) {
+									final String l = line;
+									if (isCliMode) System.out.println(l);
+									else SwingUtilities.invokeLater(() -> appendToPane(target, l + "\n", Color.LIGHT_GRAY));
 								}
-								if (user != null && pass != null && !user.isEmpty() && !pass.isEmpty()) return new String[]{user, pass};
-							} catch (Exception ignored) {}
-							try { Process p = new ProcessBuilder("git", "config", "--global", "user.name").redirectErrorStream(true).start();
-								String n = new String(p.getInputStream().readAllBytes()).trim(); p.waitFor(2, TimeUnit.SECONDS);
-								if (!n.isEmpty()) return new String[]{n, null}; } catch (Exception ignored) {}
-							return null;
-						}
+							} catch (IOException ignored) {}
+						});
+					t.setDaemon(true);
+					t.start();
+					return t;
+				}
 
-						private void saveGitCredentials(String u, String t) {
+				private void stripModuleInfo(File dir) {
+					try {
+						Files.walk(dir.toPath()).filter(p -> {
+								String path = p.toString().replace("\\", "/");
+								String name = p.getFileName().toString().toUpperCase();
+								if (name.equals("MODULE-INFO.CLASS")) return true;
+								if (path.contains("META-INF/versions/")) return true;
+								if (path.contains("META-INF/") && !p.toFile().isDirectory())
+								return name.endsWith(".SF") || name.endsWith(".RSA") || name.endsWith(".DSA") || name.endsWith(".EC");
+								return false;
+							}).forEach(p -> { try { Files.deleteIfExists(p); } catch (IOException ignored) {} });
+						// Leere META-INF/versions aufräumen
+						Files.walk(dir.toPath())
+						.filter(p -> p.toString().replace("\\", "/").contains("META-INF/versions") && p.toFile().isDirectory())
+						.sorted(Comparator.reverseOrder())
+						.forEach(p -> { try { if (Objects.requireNonNull(p.toFile().list()).length == 0) Files.deleteIfExists(p); } catch (Exception ignored) {} });
+					} catch (IOException e) { log("[WARN] Metadaten-Bereinigung: " + e.getMessage() + "\n", Color.ORANGE); }
+				}
+
+				private void deleteDirectory(File dir) throws IOException {
+					if (dir.exists()) Files.walk(dir.toPath()).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
+				}
+
+				private void copyDirectory(File src, File dst) throws IOException {
+					Path s = src.toPath(), d = dst.toPath();
+					Files.walk(s).forEach(n -> {
 							try {
-								List<String> lines = GIT_CREDS.exists() ? new ArrayList<>(Files.readAllLines(GIT_CREDS.toPath())) : new ArrayList<>();
-								lines.removeIf(l -> l.contains("github.com"));
-								lines.add("https://" + u + ":" + t + "@github.com");
-								Files.write(GIT_CREDS.toPath(), lines);
-								GIT_CREDS.setReadable(false, false); GIT_CREDS.setReadable(true, true);
-								GIT_CREDS.setWritable(false, false); GIT_CREDS.setWritable(true, true);
-							} catch (IOException e) { log("[GIT FEHLER] Credentials speichern: " + e.getMessage() + "\n", Color.RED); }
-						}
+								Path t = d.resolve(s.relativize(n));
+								if (Files.isDirectory(n)) Files.createDirectories(t);
+								else Files.copy(n, t, StandardCopyOption.REPLACE_EXISTING);
+							} catch (IOException e) { throw new RuntimeException(e); }
+						});
+				}
 
-						private UsernamePasswordCredentialsProvider getCredentialsProvider() {
-							String[] c = loadGitCredentials();
-							if (c == null || c[1] == null || c[1].isEmpty()) return null;
-							return new UsernamePasswordCredentialsProvider(c[0], c[1]);
-						}
+				private List<File> listFiles(File dir) {
+					File[] arr = dir.listFiles();
+					return arr != null ? Arrays.asList(arr) : Collections.emptyList();
+				}
 
-						private Git openLocalRepo() throws IOException {
-							return new Git(new FileRepositoryBuilder().findGitDir(new File(".")).readEnvironment().build());
-						}
+				// POM XML Helpers
+				private Element child(Element p, String name) {
+					if (p == null) return null;
+					NodeList nl = p.getChildNodes();
+					for (int i = 0; i < nl.getLength(); i++) { Node n = nl.item(i); if (n.getNodeType() == Node.ELEMENT_NODE && name.equals(n.getNodeName())) return (Element) n; }
+					return null;
+				}
+				private String direct(Element p, String name) {
+					NodeList nl = p.getChildNodes();
+					for (int i = 0; i < nl.getLength(); i++) { Node n = nl.item(i); if (n.getNodeType() == Node.ELEMENT_NODE && name.equals(n.getNodeName())) return n.getTextContent().trim(); }
+					return null;
+				}
+				private String tag(Element p, String name) { Element c = child(p, name); return c != null ? c.getTextContent().trim() : null; }
+				private boolean valid(String g, String a, String v) { return g != null && a != null && v != null && !v.startsWith("${"); }
+					private String firstOrDefault(String v, String def) { return (v != null && !v.isEmpty()) ? v : def; }
 
-						public static String[] loadGitCredentialsStatic() {
-							if (!GIT_CREDS.exists()) return null;
+					private String rp(String val, Map<String, String> props) { return rp(val, props, 0); }
+					private String rp(String val, Map<String, String> props, int depth) {
+						if (val == null || depth > 10) return val;
+						if (val.startsWith("${") && val.endsWith("}")) {
+							String key = val.substring(2, val.length() - 1);
+							String r = props.get(key);
+							return (r != null && !r.equals(val)) ? rp(r, props, depth + 1) : val;
+						}
+						Matcher m = Pattern.compile("\\$\\{([^}]+)\\}").matcher(val);
+					if (!m.find()) return val;
+					StringBuffer sb = new StringBuffer(); m.reset();
+					while (m.find()) m.appendReplacement(sb, Matcher.quoteReplacement(props.getOrDefault(m.group(1), m.group(0))));
+					m.appendTail(sb);
+					String res = sb.toString();
+					return res.contains("${") && depth < 10 ? rp(res, props, depth + 1) : res;
+					}
+
+					// ══════════════════════════════════════════════════════════════════════════
+					//  DATA CLASSES
+					// ══════════════════════════════════════════════════════════════════════════
+
+					private static class PomData {
+						String packaging = "jar";
+						final Map<String, String> properties      = new HashMap<>();
+						final Map<String, String> managedVersions = new HashMap<>();
+						final List<Dependency>    dependencies    = new ArrayList<>();
+					}
+
+					private static class Dependency {
+						String groupId, artifactId, version, scope;
+						boolean optional;
+					}
+
+					// ══════════════════════════════════════════════════════════════════════════
+					//  GIT CREDENTIALS
+					// ══════════════════════════════════════════════════════════════════════════
+
+					private String[] loadGitCredentials() {
+						if (GIT_CREDS.exists()) {
 							try {
 								for (String line : Files.readAllLines(GIT_CREDS.toPath())) {
 									line = line.trim();
@@ -1645,168 +1593,221 @@ public class TBuild {
 									}
 								}
 							} catch (IOException ignored) {}
-							return null;
 						}
-
-						// ══════════════════════════════════════════════════════════════════════════
-						//  GIT AKTIONEN
-						// ══════════════════════════════════════════════════════════════════════════
-
-						private void gitLogin() {
-							String[] ex = loadGitCredentials();
-							JPanel p = new JPanel(new GridLayout(3, 2, 8, 8));
-							p.setBorder(new EmptyBorder(10, 10, 10, 10));
-							JTextField user = new JTextField(ex != null ? ex[0] : "", 20);
-							JPasswordField pass = new JPasswordField(20);
-							p.add(new JLabel("GitHub-Benutzername:")); p.add(user);
-							p.add(new JLabel("Personal Access Token:")); p.add(pass);
-							p.add(new JLabel("<html><small>Token: github.com → Settings → Developer settings → PAT</small></html>"));
-							p.add(ex != null ? new JLabel("<html><small style='color:green'>✓ Angemeldet als " + ex[0] + "</small></html>") : new JLabel(""));
-							if (JOptionPane.showConfirmDialog(frame, p, "GitHub Anmeldung", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
-							String u = user.getText().trim(), t = new String(pass.getPassword()).trim();
-							if (u.isEmpty() || t.isEmpty()) { log("[GIT] Benutzername und Token dürfen nicht leer sein.\n", Color.RED); return; }
-							new Thread(() -> {
-									log("[GIT] Teste Verbindung...\n", Color.CYAN);
-									try {
-										HttpURLConnection c = (HttpURLConnection) new URL("https://api.github.com/user").openConnection();
-										c.setRequestProperty("Authorization", "token " + t); c.setRequestProperty("User-Agent", "TBuild");
-										c.setConnectTimeout(8000); c.setReadTimeout(8000);
-										if (c.getResponseCode() == 200) { saveGitCredentials(u, t); log("[GIT] ✓ Angemeldet als: " + u + "\n", new Color(80, 200, 120)); }
-										else log("[GIT] Anmeldung fehlgeschlagen (HTTP " + c.getResponseCode() + ").\n", Color.RED);
-									} catch (Exception e) { log("[GIT] Verbindungsfehler: " + e.getMessage() + "\n", Color.RED); }
-								}, "git-login").start();
-						}
-
-						private void gitStatus() {
-							new Thread(() -> {
-									try (Git git = openLocalRepo()) {
-										Status s = git.status().call();
-										log("[GIT] Branch: " + git.getRepository().getBranch() + "\n", Color.CYAN);
-										if (!s.getAdded().isEmpty())       log("[GIT] Neu (staged):  " + s.getAdded()       + "\n", new Color(80, 200, 120));
-										if (!s.getModified().isEmpty())     log("[GIT] Geändert:      " + s.getModified()     + "\n", Color.ORANGE);
-										if (!s.getUntracked().isEmpty())    log("[GIT] Untracked:     " + s.getUntracked()    + "\n", Color.LIGHT_GRAY);
-										if (!s.getRemoved().isEmpty())      log("[GIT] Gelöscht:      " + s.getRemoved()      + "\n", Color.RED);
-										if (!s.getConflicting().isEmpty())  log("[GIT] Konflikte:     " + s.getConflicting()  + "\n", Color.RED);
-										if (s.isClean())                    log("[GIT] ✓ Alles sauber.\n", new Color(80, 200, 120));
-									} catch (Exception e) { log("[GIT FEHLER] " + e.getMessage() + "\n", Color.RED); }
-								}, "git-status").start();
-						}
-
-						private void gitInitLocal() {
-							if (JOptionPane.showConfirmDialog(frame, "Lokales Git-Repo initialisieren?", "Init", JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return;
-							new Thread(() -> {
-									try { Git.init().setDirectory(new File(".")).call().close(); log("[GIT] ✓ Repository initialisiert.\n", new Color(80, 200, 120)); }
-									catch (GitAPIException e) { log("[GIT FEHLER] " + e.getMessage() + "\n", Color.RED); }
-								}, "git-init").start();
-						}
-
-						private void gitClone() {
-							JPanel p = new JPanel(new GridLayout(2, 2, 8, 8));
-							p.setBorder(new EmptyBorder(10, 10, 10, 10));
-							JTextField url = new JTextField("https://github.com/user/repo.git", 30);
-							JTextField tgt = new JTextField(new File(".").getAbsolutePath(), 30);
-							p.add(new JLabel("URL:")); p.add(url); p.add(new JLabel("Zielordner:")); p.add(tgt);
-							if (JOptionPane.showConfirmDialog(frame, p, "Repo klonen", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
-							new Thread(() -> {
-									log("[GIT] Klone " + url.getText().trim() + "...\n", Color.CYAN);
-									try {
-										CloneCommand cmd = Git.cloneRepository().setURI(url.getText().trim()).setDirectory(new File(tgt.getText().trim()));
-										UsernamePasswordCredentialsProvider cp = getCredentialsProvider();
-										if (cp != null) cmd.setCredentialsProvider(cp);
-										cmd.call().close();
-										log("[GIT] ✓ Geklont nach: " + tgt.getText().trim() + "\n", new Color(80, 200, 120));
-									} catch (GitAPIException e) { log("[GIT FEHLER] " + e.getMessage() + "\n", Color.RED); }
-								}, "git-clone").start();
-						}
-
-						private void gitCreateGitHub() {
-							String[] creds = loadGitCredentials();
-							if (creds == null || creds[1] == null) { log("[GIT] Bitte erst anmelden.\n", Color.ORANGE); return; }
-							JPanel p = new JPanel(new GridLayout(4, 2, 8, 8));
-							p.setBorder(new EmptyBorder(10, 10, 10, 10));
-							JTextField nameF = new JTextField("", 20), descF = new JTextField("", 20);
-							try { nameF.setText(new File(".").getCanonicalFile().getName()); } catch (Exception ignored) {}
-							JCheckBox privBox = new JCheckBox("Privates Repo"), initBox = new JCheckBox("Lokal init + Remote setzen", true);
-							p.add(new JLabel("Repo-Name:")); p.add(nameF); p.add(new JLabel("Beschreibung:")); p.add(descF);
-							p.add(privBox); p.add(initBox); p.add(new JLabel("")); p.add(new JLabel(""));
-							if (JOptionPane.showConfirmDialog(frame, p, "Neues GitHub-Repo", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
-							String repoName = nameF.getText().trim(), desc = descF.getText().trim();
-							boolean priv = privBox.isSelected(), init = initBox.isSelected();
-							new Thread(() -> {
-									try {
-										String body = "{\"name\":\"" + repoName + "\",\"description\":\"" + desc + "\",\"private\":" + priv + "}";
-										HttpURLConnection conn = (HttpURLConnection) new URL("https://api.github.com/user/repos").openConnection();
-										conn.setRequestMethod("POST"); conn.setDoOutput(true);
-										conn.setRequestProperty("Authorization", "token " + creds[1]);
-										conn.setRequestProperty("Content-Type", "application/json"); conn.setRequestProperty("User-Agent", "TBuild");
-										conn.setConnectTimeout(8000); conn.setReadTimeout(8000);
-										conn.getOutputStream().write(body.getBytes(StandardCharsets.UTF_8));
-										int code = conn.getResponseCode();
-										if (code == 201) {
-											String repoUrl = "https://github.com/" + creds[0] + "/" + repoName + ".git";
-											log("[GIT] ✓ Repo erstellt: " + repoUrl + "\n", new Color(80, 200, 120));
-											if (init) {
-												Git git = new File(".git").exists() ? openLocalRepo() : Git.init().setDirectory(new File(".")).call();
-												File gi = new File(".gitignore");
-												if (!gi.exists()) Files.write(gi.toPath(), "out/\nbuild_temp/\ndist/\n*.class\n*.tmp\n".getBytes());
-												git.add().addFilepattern(".").call();
-												try { git.commit().setMessage("Initial commit").call(); } catch (Exception ignored) {}
-												git.remoteAdd().setName("origin").setUri(new URIish(repoUrl)).call();
-												git.push().setRemote("origin").setCredentialsProvider(new UsernamePasswordCredentialsProvider(creds[0], creds[1])).call();
-												log("[GIT] ✓ Gepusht.\n", new Color(80, 200, 120));
-												git.close();
-											}
-										} else { log("[GIT FEHLER] HTTP " + code + "\n", Color.RED); }
-									} catch (Exception e) { log("[GIT FEHLER] " + e.getMessage() + "\n", Color.RED); }
-								}, "git-create-gh").start();
-						}
-
-						private void gitAddRemote() {
-							JPanel p = new JPanel(new GridLayout(2, 2, 8, 8));
-							p.setBorder(new EmptyBorder(10, 10, 10, 10));
-							JTextField name = new JTextField("origin", 15), url = new JTextField("https://github.com/user/repo.git", 30);
-							p.add(new JLabel("Name:")); p.add(name); p.add(new JLabel("URL:")); p.add(url);
-							if (JOptionPane.showConfirmDialog(frame, p, "Remote hinzufügen", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
-							new Thread(() -> {
-									try (Git git = openLocalRepo()) {
-										git.remoteAdd().setName(name.getText().trim()).setUri(new URIish(url.getText().trim())).call();
-										log("[GIT] ✓ Remote '" + name.getText().trim() + "' hinzugefügt.\n", new Color(80, 200, 120));
-									} catch (Exception e) { log("[GIT FEHLER] " + e.getMessage() + "\n", Color.RED); }
-								}, "git-add-remote").start();
-						}
-
-						private void gitShowBranches() {
-							new Thread(() -> {
-									try (Git git = openLocalRepo()) {
-										List<Ref> branches = git.branchList().call();
-										String current = git.getRepository().getBranch();
-										log("[GIT] Branches:\n", new Color(255, 200, 80));
-										List<String> names = new ArrayList<>();
-										for (Ref r : branches) {
-											String n = r.getName().replace("refs/heads/", "");
-											names.add(n);
-											log("[GIT]   " + n + (n.equals(current) ? " ← aktuell" : "") + "\n", n.equals(current) ? new Color(80, 200, 120) : Color.LIGHT_GRAY);
-										}
-										SwingUtilities.invokeLater(() -> {
-												if (names.isEmpty()) return;
-												String choice = (String) JOptionPane.showInputDialog(frame, "Branch wechseln:", "Branch", JOptionPane.PLAIN_MESSAGE, null, names.toArray(), current);
-												if (choice != null && !choice.equals(current)) {
-													new Thread(() -> {
-															try (Git g = openLocalRepo()) { g.checkout().setName(choice).call(); log("[GIT] ✓ Wechsel zu: " + choice + "\n", new Color(80, 200, 120)); }
-															catch (Exception ex) { log("[GIT FEHLER] " + ex.getMessage() + "\n", Color.RED); }
-														}, "git-checkout").start();
-												}
-											});
-									} catch (Exception e) { log("[GIT FEHLER] " + e.getMessage() + "\n", Color.RED); }
-								}, "git-branches").start();
-						}
-
-						private void gitCreateBranch() {
-							String name = (String) JOptionPane.showInputDialog(frame, "Name des neuen Branches:", "Neuer Branch", JOptionPane.PLAIN_MESSAGE, null, null, "feature/neu");
-							if (name == null || name.isBlank()) return;
-							new Thread(() -> {
-									try (Git git = openLocalRepo()) { git.checkout().setCreateBranch(true).setName(name.trim()).call(); log("[GIT] ✓ Branch erstellt: " + name.trim() + "\n", new Color(80, 200, 120)); }
-									catch (Exception e) { log("[GIT FEHLER] " + e.getMessage() + "\n", Color.RED); }
-								}, "git-new-branch").start();
-						}
+						try {
+							Process p = new ProcessBuilder("git", "credential", "fill").redirectErrorStream(true).start();
+							p.getOutputStream().write("protocol=https\nhost=github.com\n\n".getBytes());
+							p.getOutputStream().flush(); p.getOutputStream().close();
+							String out = new String(p.getInputStream().readAllBytes()).trim();
+							p.waitFor(3, TimeUnit.SECONDS);
+							String user = null, pass = null;
+							for (String l : out.split("[\r\n]+")) {
+								if (l.startsWith("username=")) user = l.substring(9).trim();
+								if (l.startsWith("password=")) pass = l.substring(9).trim();
+							}
+							if (user != null && pass != null && !user.isEmpty() && !pass.isEmpty()) return new String[]{user, pass};
+						} catch (Exception ignored) {}
+						try { Process p = new ProcessBuilder("git", "config", "--global", "user.name").redirectErrorStream(true).start();
+							String n = new String(p.getInputStream().readAllBytes()).trim(); p.waitFor(2, TimeUnit.SECONDS);
+							if (!n.isEmpty()) return new String[]{n, null}; } catch (Exception ignored) {}
+						return null;
 					}
+
+					private void saveGitCredentials(String u, String t) {
+						try {
+							List<String> lines = GIT_CREDS.exists() ? new ArrayList<>(Files.readAllLines(GIT_CREDS.toPath())) : new ArrayList<>();
+							lines.removeIf(l -> l.contains("github.com"));
+							lines.add("https://" + u + ":" + t + "@github.com");
+							Files.write(GIT_CREDS.toPath(), lines);
+							GIT_CREDS.setReadable(false, false); GIT_CREDS.setReadable(true, true);
+							GIT_CREDS.setWritable(false, false); GIT_CREDS.setWritable(true, true);
+						} catch (IOException e) { log("[GIT FEHLER] Credentials speichern: " + e.getMessage() + "\n", Color.RED); }
+					}
+
+					private UsernamePasswordCredentialsProvider getCredentialsProvider() {
+						String[] c = loadGitCredentials();
+						if (c == null || c[1] == null || c[1].isEmpty()) return null;
+						return new UsernamePasswordCredentialsProvider(c[0], c[1]);
+					}
+
+					private Git openLocalRepo() throws IOException {
+						return new Git(new FileRepositoryBuilder().findGitDir(new File(".")).readEnvironment().build());
+					}
+
+					public static String[] loadGitCredentialsStatic() {
+						if (!GIT_CREDS.exists()) return null;
+						try {
+							for (String line : Files.readAllLines(GIT_CREDS.toPath())) {
+								line = line.trim();
+								if (line.contains("github.com") && line.startsWith("https://")) {
+									String part = line.substring(8); int at = part.lastIndexOf('@');
+									if (at > 0) { String up = part.substring(0, at); int col = up.indexOf(':');
+										if (col > 0) return new String[]{up.substring(0, col), up.substring(col + 1)}; }
+								}
+							}
+						} catch (IOException ignored) {}
+						return null;
+					}
+
+					// ══════════════════════════════════════════════════════════════════════════
+					//  GIT AKTIONEN
+					// ══════════════════════════════════════════════════════════════════════════
+
+					private void gitLogin() {
+						String[] ex = loadGitCredentials();
+						JPanel p = new JPanel(new GridLayout(3, 2, 8, 8));
+						p.setBorder(new EmptyBorder(10, 10, 10, 10));
+						JTextField user = new JTextField(ex != null ? ex[0] : "", 20);
+						JPasswordField pass = new JPasswordField(20);
+						p.add(new JLabel("GitHub-Benutzername:")); p.add(user);
+						p.add(new JLabel("Personal Access Token:")); p.add(pass);
+						p.add(new JLabel("<html><small>Token: github.com → Settings → Developer settings → PAT</small></html>"));
+						p.add(ex != null ? new JLabel("<html><small style='color:green'>✓ Angemeldet als " + ex[0] + "</small></html>") : new JLabel(""));
+						if (JOptionPane.showConfirmDialog(frame, p, "GitHub Anmeldung", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
+						String u = user.getText().trim(), t = new String(pass.getPassword()).trim();
+						if (u.isEmpty() || t.isEmpty()) { log("[GIT] Benutzername und Token dürfen nicht leer sein.\n", Color.RED); return; }
+						new Thread(() -> {
+								log("[GIT] Teste Verbindung...\n", Color.CYAN);
+								try {
+									HttpURLConnection c = (HttpURLConnection) new URL("https://api.github.com/user").openConnection();
+									c.setRequestProperty("Authorization", "token " + t); c.setRequestProperty("User-Agent", "TBuild");
+									c.setConnectTimeout(8000); c.setReadTimeout(8000);
+									if (c.getResponseCode() == 200) { saveGitCredentials(u, t); log("[GIT] ✓ Angemeldet als: " + u + "\n", new Color(80, 200, 120)); }
+									else log("[GIT] Anmeldung fehlgeschlagen (HTTP " + c.getResponseCode() + ").\n", Color.RED);
+								} catch (Exception e) { log("[GIT] Verbindungsfehler: " + e.getMessage() + "\n", Color.RED); }
+							}, "git-login").start();
+					}
+
+					private void gitStatus() {
+						new Thread(() -> {
+								try (Git git = openLocalRepo()) {
+									Status s = git.status().call();
+									log("[GIT] Branch: " + git.getRepository().getBranch() + "\n", Color.CYAN);
+									if (!s.getAdded().isEmpty())       log("[GIT] Neu (staged):  " + s.getAdded()       + "\n", new Color(80, 200, 120));
+									if (!s.getModified().isEmpty())     log("[GIT] Geändert:      " + s.getModified()     + "\n", Color.ORANGE);
+									if (!s.getUntracked().isEmpty())    log("[GIT] Untracked:     " + s.getUntracked()    + "\n", Color.LIGHT_GRAY);
+									if (!s.getRemoved().isEmpty())      log("[GIT] Gelöscht:      " + s.getRemoved()      + "\n", Color.RED);
+									if (!s.getConflicting().isEmpty())  log("[GIT] Konflikte:     " + s.getConflicting()  + "\n", Color.RED);
+									if (s.isClean())                    log("[GIT] ✓ Alles sauber.\n", new Color(80, 200, 120));
+								} catch (Exception e) { log("[GIT FEHLER] " + e.getMessage() + "\n", Color.RED); }
+							}, "git-status").start();
+					}
+
+					private void gitInitLocal() {
+						if (JOptionPane.showConfirmDialog(frame, "Lokales Git-Repo initialisieren?", "Init", JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) return;
+						new Thread(() -> {
+								try { Git.init().setDirectory(new File(".")).call().close(); log("[GIT] ✓ Repository initialisiert.\n", new Color(80, 200, 120)); }
+								catch (GitAPIException e) { log("[GIT FEHLER] " + e.getMessage() + "\n", Color.RED); }
+							}, "git-init").start();
+					}
+
+					private void gitClone() {
+						JPanel p = new JPanel(new GridLayout(2, 2, 8, 8));
+						p.setBorder(new EmptyBorder(10, 10, 10, 10));
+						JTextField url = new JTextField("https://github.com/user/repo.git", 30);
+						JTextField tgt = new JTextField(new File(".").getAbsolutePath(), 30);
+						p.add(new JLabel("URL:")); p.add(url); p.add(new JLabel("Zielordner:")); p.add(tgt);
+						if (JOptionPane.showConfirmDialog(frame, p, "Repo klonen", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
+						new Thread(() -> {
+								log("[GIT] Klone " + url.getText().trim() + "...\n", Color.CYAN);
+								try {
+									CloneCommand cmd = Git.cloneRepository().setURI(url.getText().trim()).setDirectory(new File(tgt.getText().trim()));
+									UsernamePasswordCredentialsProvider cp = getCredentialsProvider();
+									if (cp != null) cmd.setCredentialsProvider(cp);
+									cmd.call().close();
+									log("[GIT] ✓ Geklont nach: " + tgt.getText().trim() + "\n", new Color(80, 200, 120));
+								} catch (GitAPIException e) { log("[GIT FEHLER] " + e.getMessage() + "\n", Color.RED); }
+							}, "git-clone").start();
+					}
+
+					private void gitCreateGitHub() {
+						String[] creds = loadGitCredentials();
+						if (creds == null || creds[1] == null) { log("[GIT] Bitte erst anmelden.\n", Color.ORANGE); return; }
+						JPanel p = new JPanel(new GridLayout(4, 2, 8, 8));
+						p.setBorder(new EmptyBorder(10, 10, 10, 10));
+						JTextField nameF = new JTextField("", 20), descF = new JTextField("", 20);
+						try { nameF.setText(new File(".").getCanonicalFile().getName()); } catch (Exception ignored) {}
+						JCheckBox privBox = new JCheckBox("Privates Repo"), initBox = new JCheckBox("Lokal init + Remote setzen", true);
+						p.add(new JLabel("Repo-Name:")); p.add(nameF); p.add(new JLabel("Beschreibung:")); p.add(descF);
+						p.add(privBox); p.add(initBox); p.add(new JLabel("")); p.add(new JLabel(""));
+						if (JOptionPane.showConfirmDialog(frame, p, "Neues GitHub-Repo", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
+						String repoName = nameF.getText().trim(), desc = descF.getText().trim();
+						boolean priv = privBox.isSelected(), init = initBox.isSelected();
+						new Thread(() -> {
+								try {
+									String body = "{\"name\":\"" + repoName + "\",\"description\":\"" + desc + "\",\"private\":" + priv + "}";
+									HttpURLConnection conn = (HttpURLConnection) new URL("https://api.github.com/user/repos").openConnection();
+									conn.setRequestMethod("POST"); conn.setDoOutput(true);
+									conn.setRequestProperty("Authorization", "token " + creds[1]);
+									conn.setRequestProperty("Content-Type", "application/json"); conn.setRequestProperty("User-Agent", "TBuild");
+									conn.setConnectTimeout(8000); conn.setReadTimeout(8000);
+									conn.getOutputStream().write(body.getBytes(StandardCharsets.UTF_8));
+									int code = conn.getResponseCode();
+									if (code == 201) {
+										String repoUrl = "https://github.com/" + creds[0] + "/" + repoName + ".git";
+										log("[GIT] ✓ Repo erstellt: " + repoUrl + "\n", new Color(80, 200, 120));
+										if (init) {
+											Git git = new File(".git").exists() ? openLocalRepo() : Git.init().setDirectory(new File(".")).call();
+											File gi = new File(".gitignore");
+											if (!gi.exists()) Files.write(gi.toPath(), "out/\nbuild_temp/\ndist/\n*.class\n*.tmp\n".getBytes());
+											git.add().addFilepattern(".").call();
+											try { git.commit().setMessage("Initial commit").call(); } catch (Exception ignored) {}
+											git.remoteAdd().setName("origin").setUri(new URIish(repoUrl)).call();
+											git.push().setRemote("origin").setCredentialsProvider(new UsernamePasswordCredentialsProvider(creds[0], creds[1])).call();
+											log("[GIT] ✓ Gepusht.\n", new Color(80, 200, 120));
+											git.close();
+										}
+									} else { log("[GIT FEHLER] HTTP " + code + "\n", Color.RED); }
+								} catch (Exception e) { log("[GIT FEHLER] " + e.getMessage() + "\n", Color.RED); }
+							}, "git-create-gh").start();
+					}
+
+					private void gitAddRemote() {
+						JPanel p = new JPanel(new GridLayout(2, 2, 8, 8));
+						p.setBorder(new EmptyBorder(10, 10, 10, 10));
+						JTextField name = new JTextField("origin", 15), url = new JTextField("https://github.com/user/repo.git", 30);
+						p.add(new JLabel("Name:")); p.add(name); p.add(new JLabel("URL:")); p.add(url);
+						if (JOptionPane.showConfirmDialog(frame, p, "Remote hinzufügen", JOptionPane.OK_CANCEL_OPTION) != JOptionPane.OK_OPTION) return;
+						new Thread(() -> {
+								try (Git git = openLocalRepo()) {
+									git.remoteAdd().setName(name.getText().trim()).setUri(new URIish(url.getText().trim())).call();
+									log("[GIT] ✓ Remote '" + name.getText().trim() + "' hinzugefügt.\n", new Color(80, 200, 120));
+								} catch (Exception e) { log("[GIT FEHLER] " + e.getMessage() + "\n", Color.RED); }
+							}, "git-add-remote").start();
+					}
+
+					private void gitShowBranches() {
+						new Thread(() -> {
+								try (Git git = openLocalRepo()) {
+									List<Ref> branches = git.branchList().call();
+									String current = git.getRepository().getBranch();
+									log("[GIT] Branches:\n", new Color(255, 200, 80));
+									List<String> names = new ArrayList<>();
+									for (Ref r : branches) {
+										String n = r.getName().replace("refs/heads/", "");
+										names.add(n);
+										log("[GIT]   " + n + (n.equals(current) ? " ← aktuell" : "") + "\n", n.equals(current) ? new Color(80, 200, 120) : Color.LIGHT_GRAY);
+									}
+									SwingUtilities.invokeLater(() -> {
+											if (names.isEmpty()) return;
+											String choice = (String) JOptionPane.showInputDialog(frame, "Branch wechseln:", "Branch", JOptionPane.PLAIN_MESSAGE, null, names.toArray(), current);
+											if (choice != null && !choice.equals(current)) {
+												new Thread(() -> {
+														try (Git g = openLocalRepo()) { g.checkout().setName(choice).call(); log("[GIT] ✓ Wechsel zu: " + choice + "\n", new Color(80, 200, 120)); }
+														catch (Exception ex) { log("[GIT FEHLER] " + ex.getMessage() + "\n", Color.RED); }
+													}, "git-checkout").start();
+											}
+										});
+								} catch (Exception e) { log("[GIT FEHLER] " + e.getMessage() + "\n", Color.RED); }
+							}, "git-branches").start();
+					}
+
+					private void gitCreateBranch() {
+						String name = (String) JOptionPane.showInputDialog(frame, "Name des neuen Branches:", "Neuer Branch", JOptionPane.PLAIN_MESSAGE, null, null, "feature/neu");
+						if (name == null || name.isBlank()) return;
+						new Thread(() -> {
+								try (Git git = openLocalRepo()) { git.checkout().setCreateBranch(true).setName(name.trim()).call(); log("[GIT] ✓ Branch erstellt: " + name.trim() + "\n", new Color(80, 200, 120)); }
+								catch (Exception e) { log("[GIT FEHLER] " + e.getMessage() + "\n", Color.RED); }
+							}, "git-new-branch").start();
+					}
+				}
