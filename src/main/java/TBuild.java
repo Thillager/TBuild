@@ -974,7 +974,6 @@ public class TBuild {
 				cmd.add("--win-shortcut");
 				cmd.add("--win-menu");
 				if (needsTerminal) cmd.add("--win-console"); // Nur Konsole anzeigen, wenn explizit gewünscht!
-			}
 		} else if (!os.contains("mac")) {
 			cmd.add("--linux-shortcut");
 			cmd.add("--linux-app-category"); cmd.add("Application");
