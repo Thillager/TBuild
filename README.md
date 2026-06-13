@@ -21,7 +21,7 @@ TBuild is a **powerful, user-friendly build tool** designed for managing project
 
 ## Requirements
 
-- **Java Runtime Environment (JRE) 25 or higher**
+- **Java 21 or higher** (with jpackage support for installers)
 - **At least 512 MB RAM**
 - **50 MB free disk space**
 
@@ -34,7 +34,7 @@ TBuild is a **powerful, user-friendly build tool** designed for managing project
    java -version
    ```
 
-2. Download the latest JAR file from the [releases page](https://github.com/Thillager/TBuild/releases/latest)
+2. Download the latest TBuild.jar from the [releases page](https://github.com/Thillager/TBuild/releases/latest) or use the pre-compiled JAR in this repository
 
 3. Run the JAR file:
    ```bash
@@ -77,11 +77,11 @@ java -jar TBuild.jar --add-dependency <dependency-name> <version>
 
 ```
 Project/
-├── src/                      # Source code
+├── src/
 │   └── main/
 │       └── java/             # Java source files
 ├── libs/                      # External libraries and dependencies
-├── production/                # Production artifacts and builds
+├── out/                       # Compiled output and build artifacts
 ├── T.xml                      # Project configuration (auto-managed)
 ```
 
@@ -92,13 +92,12 @@ TBuild manages the `T.xml` file automatically through its GUI. No manual editing
 The T.xml contains your project configuration:
 
 ```xml
+<?xml version="1.0" encoding="UTF-8"?>
 <project>
-  <mainClass>Main</mainClass>      <!-- Main class to run -->
-  <appName>MyApp</appName>         <!-- Application name -->
-  <version>1.0.0</version>         <!-- Version string -->
-  <dependencies>
-    <!-- Dependencies managed automatically -->
-  </dependencies>
+  <mainClass>Main</mainClass>             <!-- Main class to run -->
+  <appName>MyApp</appName>                <!-- Application name -->
+  <version>1.0.0</version>                <!-- Version string -->
+  <winUpgradeUuid>...</winUpgradeUuid>    <!-- Windows installer UUID -->
 </project>
 ```
 
@@ -148,7 +147,7 @@ Add your Java source files to the `src/main/java/` directory.
 ## Troubleshooting
 
 ### Problem: "Java not found"
-**Solution**: Install Java Runtime Environment (JRE) from [java.com](https://www.java.com)
+**Solution**: Install Java Runtime Environment (JRE) 21 or higher from [java.com](https://www.java.com)
 
 ### Problem: JAR file won't run
 **Solution**:
@@ -156,6 +155,7 @@ Add your Java source files to the `src/main/java/` directory.
 # Check Java version
 java -version
 
+# Make sure you have Java 21 or higher
 # Run with explicit path
 java -jar /path/to/TBuild.jar
 ```
@@ -185,7 +185,7 @@ java -jar TBuild.jar --version
 ## License
 
 This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for details.
-This project uses dependencies. The necessary licenses are in the THIRD_PARTY_LICENSES.md
+This project uses dependencies. The necessary licenses are in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md)
 
 ## Built With
 TBuild uses the power of proven open-source libraries for reliable dependency management and build capabilities.
