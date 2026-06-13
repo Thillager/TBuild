@@ -4,70 +4,74 @@
 [![Java](https://img.shields.io/badge/Java-100%25-orange)](https://www.java.com/)
 [![Version](https://img.shields.io/badge/Version-latest-blue)](https://github.com/Thillager/TBuild/releases/latest)
 
-TBuild is a **powerful, user-friendly build tool** designed for managing project dependencies and packaging applications. It simplifies the build process and makes project management as easy as possible, without unnecessary complexity.
+TBuild is a **powerful, user-friendly build tool** designed for managing project dependencies and packaging applications. It simplifies the build process with a full graphical interface, so you never have to manually edit XML files. For automation, TBuild also offers a comprehensive CLI mode. No complexity, just simplicity.
 
 ## Features
 
-- ✅ **Dependency Management** - Easy management of project dependencies
+- ✅ **Dependency Management** - Easy management of project dependencies through the GUI
 - ✅ **Project Packaging** - Package your applications efficiently
+- ✅ **Graphical Interface** - Complete GUI support - no manual XML editing needed
+- ✅ **CLI Mode** - Full command-line interface for automation and scripting
 - ✅ **Project Initialization** - Quickly set up new projects with standard structures
 - ✅ **Lightweight** - Fast performance and low resource consumption
 - ✅ **Platform Independent** - Runs on Windows, Linux and macOS (all Java-supporting systems)
 - ✅ **GUI with Java Swing** - Native and responsive user interface
-- ✅ **Command Line Interface** - Full CLI support for automation and scripting
 - ✅ **No Telemetry** - Your data stays yours, no tracking
-- ✅ **Configuration Files** - Simple T.xml configuration format
 - ✅ **Integration** - Seamless integration with TIDE IDE
 
 ## Requirements
 
-- **Java development kit (JDK) 25 or higher**
-     - Or use the .msi/.deb installers, then the jdk version is irrelevant
+- **Java Runtime Environment (JRE) 25 or higher**
 - **At least 512 MB RAM**
 - **50 MB free disk space**
 
 ## Installation and Usage
 
-### Option 1: Installer
-
-#### Linux:
-
-1. Download the .deb file from the latest release.
-
-2. Install:
-   ```bash
-   sudo apt install ./filename.deb
-   ```
-
-#### Windows:
-
-1. Download the .msi or .exe (version dependent) installer from the latest release
-
-2. Run by double-clicking.
-
-### Option 2: Run Pre-compiled JAR
+### Download and Run JAR
 
 1. Make sure Java is installed on your system:
    ```bash
    java -version
    ```
 
-2. Run the JAR file:
+2. Download the latest JAR file from the [releases page](https://github.com/Thillager/TBuild/releases/latest)
+
+3. Run the JAR file:
    ```bash
    java -jar TBuild.jar
    ```
 
-3. The TBuild tool will open and be ready to use.
+4. The TBuild tool will open and be ready to use.
 
 ## How TBuild Works
 
-### Workflow Example
+### GUI Mode - Project Management
 
-1. **Initialize Project**: Start TBuild and initialize a new project
-2. **Configure Dependencies**: Add dependencies via the GUI or T.xml
-3. **Build Project**: Use the Build button or menu to compile and package
-4. **Deploy**: Package your application for distribution
-5. **Check Output**: View build results in the console
+TBuild's graphical interface makes project management intuitive:
+
+1. **Initialize Project**: Click "New Project" in the GUI
+2. **Configure Dependencies**: Add and manage dependencies through the interface
+3. **Set Build Options**: Configure output, main class, and other settings
+4. **Build Project**: Use the Build button to compile and package
+5. **View Results**: See build output and any errors in the console
+
+### CLI Mode - Automation
+
+For automation and CI/CD pipelines, use TBuild's CLI:
+
+```bash
+# Initialize a new project
+java -jar TBuild.jar --init <project-name>
+
+# Build a project
+java -jar TBuild.jar --build
+
+# Package for distribution
+java -jar TBuild.jar --build --package
+
+# Add dependencies from command line
+java -jar TBuild.jar --add-dependency <dependency-name> <version>
+```
 
 ## Project Structure
 
@@ -78,12 +82,14 @@ Project/
 │       └── java/             # Java source files
 ├── libs/                      # External libraries and dependencies
 ├── production/                # Production artifacts and builds
-├── T.xml                      # Project configuration
+├── T.xml                      # Project configuration (auto-managed)
 ```
 
 ## Configuration
 
-The `T.xml` file contains the project configuration:
+TBuild manages the `T.xml` file automatically through its GUI. No manual editing required!
+
+The T.xml contains your project configuration:
 
 ```xml
 <project>
@@ -91,26 +97,40 @@ The `T.xml` file contains the project configuration:
   <appName>MyApp</appName>         <!-- Application name -->
   <version>1.0.0</version>         <!-- Version string -->
   <dependencies>
-    <!-- Dependencies go here -->
+    <!-- Dependencies managed automatically -->
   </dependencies>
 </project>
 ```
 
-You can edit this file directly to configure your project dependencies and settings. TBuild provides a graphical interface to make this process easier.
+### GUI Configuration
+
+Simply use TBuild's graphical interface to:
+- Set project name and version
+- Manage dependencies
+- Configure build options
+- Choose output formats
+
+All changes are automatically saved to T.xml.
 
 ## Example: Your First Project with TBuild
 
-### Step 1: Initialize a New Project
-Start TBuild and click the "Initialize Project" button or use the menu.
+### Step 1: Launch TBuild
+```bash
+java -jar TBuild.jar
+```
 
-### Step 2: Configure Your Project
-Edit the T.xml file to add your project details and dependencies.
+### Step 2: Create a New Project
+Click "New Project" in the GUI and enter your project details.
 
 ### Step 3: Add Dependencies
-Use TBuild's dependency manager to add required libraries to your project.
+Use the Dependency Manager to search for and add libraries your project needs.
 
-### Step 4: Build
-- Click the **Build** button to compile and package your project
+### Step 4: Write Your Code
+Add your Java source files to the `src/main/java/` directory.
+
+### Step 5: Build and Package
+- Click the **Build** button to compile your project
+- Click the **Package** button to create distribution packages
 
 ## Updates
 
@@ -122,7 +142,7 @@ Use TBuild's dependency manager to add required libraries to your project.
 - Click the "About" button
 - Click the "Check for Updates" button
 - Install
-- Wait a moment (until the desktop icon reloads)
+- Wait a moment (until the application reloads)
 - Start
 
 ## Troubleshooting
@@ -142,10 +162,19 @@ java -jar /path/to/TBuild.jar
 
 ### Problem: Build fails with dependency errors
 **Solution**:
-- Check your T.xml configuration
-- Make sure all dependencies are correctly specified
-- Check the error output in the console
-- Verify internet connection for downloading dependencies
+- Use the Dependency Manager GUI to verify all dependencies are correct
+- Check the build log in the console for detailed error messages
+- Verify your internet connection for downloading dependencies
+
+### Problem: CLI commands not recognized
+**Solution**:
+```bash
+# Get help on available CLI options
+java -jar TBuild.jar --help
+
+# Check that you're running the correct JAR file
+java -jar TBuild.jar --version
+```
 
 ## Documentation and Links
 
@@ -159,7 +188,7 @@ This project is licensed under the **MIT License**. See [LICENSE](LICENSE) for d
 This project uses dependencies. The necessary licenses are in the THIRD_PARTY_LICENSES.md
 
 ## Built With
-TBuild uses the power of proven open-source libraries for reliable dependency management and building capabilities.
+TBuild uses the power of proven open-source libraries for reliable dependency management and build capabilities.
 
 ## Contributing
 
