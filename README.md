@@ -154,15 +154,7 @@ Add your Java source files to the `src/main/java/` directory.
 ## Updates
 
 ### Frequency
-- Updates come whenever I have time, ideas, or bugs to fix
-
-### How do I install them?
-- Start TBuild as administrator
-- Click the "Über" (About) button
-- Click the "Nach Updates suchen" (Check for Updates) button
-- Install
-- Wait a moment (until the application reloads)
-- Start
+- Updates come whenever I have time, ideas, or bugs to
 
 ## Troubleshooting
 
