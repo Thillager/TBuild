@@ -49,10 +49,10 @@ TBuild ist ein **starkes, benutzerfreundliches Build-Tool**, das für die Verwal
 
 Die grafische Benutzeroberfläche von TBuild macht Projektmanagement intuitiv:
 
-1. **Projekt initialisieren**: Klicke in der GUI auf "Neues Projekt"
-2. **Abhängigkeiten konfigurieren**: Füge Abhängigkeiten über die Benutzeroberfläche hinzu und verwalte sie
+1. **Projekt initialisieren**: Klicke auf den "Init"-Button in der GUI
+2. **Abhängigkeiten konfigurieren**: Nutze die Maven-Suche, um Abhängigkeiten hinzuzufügen
 3. **Build-Optionen einstellen**: Konfiguriere Ausgabe, Hauptklasse und weitere Einstellungen
-4. **Projekt bauen**: Nutze den Build-Button zum Kompilieren und Verpacken
+4. **Projekt bauen**: Nutze den "Nur Build"- oder "Bauen+Run"-Button zum Kompilieren
 5. **Ergebnisse einsehen**: Sieh dir Build-Ausgabe und eventuelle Fehler in der Konsole an
 
 ### CLI-Modus - Automatisierung
@@ -60,17 +60,35 @@ Die grafische Benutzeroberfläche von TBuild macht Projektmanagement intuitiv:
 Für Automatisierung und CI/CD-Pipelines nutze TBuilds CLI:
 
 ```bash
-# Neues Projekt initialisieren
-java -jar TBuild.jar --init <project-name>
+# Neues Standard-Projekt initialisieren
+java -jar TBuild.jar init
 
-# Projekt bauen
-java -jar TBuild.jar --build
+# Neues JavaFX-Projekt initialisieren
+java -jar TBuild.jar init-javafx
 
-# Für Verteilung verpacken
-java -jar TBuild.jar --build --package
+# Projekt kompilieren und ausführen
+java -jar TBuild.jar build
 
-# Abhängigkeiten von der Kommandozeile hinzufügen
-java -jar TBuild.jar --add-dependency <dependency-name> <version>
+# Tests ausführen
+java -jar TBuild.jar test
+
+# Als kleine JAR exportieren (ohne Abhängigkeiten)
+java -jar TBuild.jar export-small
+
+# Als Fat-JAR exportieren (mit Abhängigkeiten)
+java -jar TBuild.jar export
+
+# Bauen und Fat-JAR erstellen (nützlich für CI/CD)
+java -jar TBuild.jar build-export-fat
+
+# Nativen Installer erstellen (Windows MSI, Linux DEB, macOS DMG)
+java -jar TBuild.jar jpackage
+
+# Hauptklasse setzen
+java -jar TBuild.jar set-main com.example.MeineHauptklasse
+
+# Version setzen
+java -jar TBuild.jar set-version 2.0.0
 ```
 
 ## Projektstruktur
@@ -78,8 +96,10 @@ java -jar TBuild.jar --add-dependency <dependency-name> <version>
 ```
 Project/
 ├── src/
-│   └── main/
-│       └── java/             # Java-Source-Dateien
+│   ├── main/
+│   │   └── java/             # Java-Source-Dateien
+│   └── test/
+│       └── java/             # JUnit-Test-Dateien
 ├── libs/                      # Externe Bibliotheken und Abhängigkeiten
 ├── out/                       # Kompilierte Ausgabe und Build-Artefakte
 ├── T.xml                      # Projektkonfiguration (auto-verwaltet)
@@ -105,7 +125,7 @@ Die T.xml enthält deine Projektkonfiguration:
 
 Nutze einfach die grafische Benutzeroberfläche von TBuild, um:
 - Projektnamen und Version zu setzen
-- Abhängigkeiten zu verwalten
+- Abhängigkeiten zu verwalten (Maven Central Suche)
 - Build-Optionen zu konfigurieren
 - Ausgabeformate zu wählen
 
@@ -119,17 +139,17 @@ java -jar TBuild.jar
 ```
 
 ### Schritt 2: Neues Projekt erstellen
-Klicke auf "Neues Projekt" in der GUI und gib deine Projektdetails ein.
+Klicke auf den "Init"-Button um ein neues Projekt zu initialisieren.
 
 ### Schritt 3: Abhängigkeiten hinzufügen
-Nutze den Abhängigkeits-Manager, um Bibliotheken zu suchen und hinzuzufügen, die dein Projekt benötigt.
+Nutze die Maven-Suche im rechten Panel, um Bibliotheken zu suchen und hinzuzufügen.
 
 ### Schritt 4: Deinen Code schreiben
 Füge deine Java-Source-Dateien zum `src/main/java/`-Verzeichnis hinzu.
 
 ### Schritt 5: Bauen und Verpacken
-- Klicke den **Build**-Button zum Kompilieren deines Projekts
-- Klicke den **Package**-Button, um Verteilungspakete zu erstellen
+- Klicke den **Nur Build**-Button zum Kompilieren deines Projekts
+- Klicke den **Fat JAR**-Button, um ein Verteilungspaket zu erstellen
 
 ## Updates
 
@@ -162,18 +182,15 @@ java -jar /pfad/zu/TBuild.jar
 
 ### Problem: Build schlägt mit Abhängigkeitsfehlern fehl
 **Lösung**:
-- Nutze den Abhängigkeits-Manager der GUI, um alle Abhängigkeiten zu überprüfen
+- Nutze die Maven-Suche im rechten Panel, um Abhängigkeiten zu überprüfen und hinzuzufügen
 - Sieh dir das Build-Log in der Konsole für detaillierte Fehlermeldungen an
 - Überprüfe deine Internetverbindung zum Herunterladen von Abhängigkeiten
 
 ### Problem: CLI-Befehle werden nicht erkannt
 **Lösung**:
 ```bash
-# Hilfe zu verfügbaren CLI-Optionen anzeigen
-java -jar TBuild.jar --help
-
-# Überprüfe, dass du die richtige JAR-Datei ausführst
-java -jar TBuild.jar --version
+# Verfügbare CLI-Befehle durch Ausführung eines ungültigen Befehls anzeigen
+java -jar TBuild.jar ungültiger-befehl
 ```
 
 ## Dokumentation und Links
