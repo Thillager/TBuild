@@ -49,7 +49,7 @@ TBuild is a **powerful, user-friendly build tool** designed for managing project
 
 TBuild's graphical interface makes project management intuitive:
 
-1. **Initialize Project**: Click "New Project" in the GUI
+1. **Initialize Project**: Click "Init" in the GUI
 2. **Configure Dependencies**: Add and manage dependencies through the interface
 3. **Set Build Options**: Configure output, main class, and other settings
 4. **Build Project**: Use the Build button to compile and package
@@ -60,17 +60,35 @@ TBuild's graphical interface makes project management intuitive:
 For automation and CI/CD pipelines, use TBuild's CLI:
 
 ```bash
-# Initialize a new project
-java -jar TBuild.jar --init <project-name>
+# Initialize a new standard project
+java -jar TBuild.jar init
+
+# Initialize a new JavaFX project
+java -jar TBuild.jar init-javafx
 
 # Build a project
-java -jar TBuild.jar --build
+java -jar TBuild.jar build
 
-# Package for distribution
-java -jar TBuild.jar --build --package
+# Run tests
+java -jar TBuild.jar test
 
-# Add dependencies from command line
-java -jar TBuild.jar --add-dependency <dependency-name> <version>
+# Export as small JAR (without dependencies)
+java -jar TBuild.jar export-small
+
+# Export as fat JAR (with dependencies)
+java -jar TBuild.jar export
+
+# Build and export as fat JAR (useful for CI/CD)
+java -jar TBuild.jar build-export-fat
+
+# Create native installer (Windows MSI, Linux DEB, macOS DMG)
+java -jar TBuild.jar jpackage
+
+# Set main class
+java -jar TBuild.jar set-main com.example.MyMainClass
+
+# Set version
+java -jar TBuild.jar set-version 2.0.0
 ```
 
 ## Project Structure
@@ -78,8 +96,10 @@ java -jar TBuild.jar --add-dependency <dependency-name> <version>
 ```
 Project/
 ├── src/
-│   └── main/
-│       └── java/             # Java source files
+│   ├── main/
+│   │   └── java/             # Java source files
+│   └── test/
+│       └── java/             # JUnit test files
 ├── libs/                      # External libraries and dependencies
 ├── out/                       # Compiled output and build artifacts
 ├── T.xml                      # Project configuration (auto-managed)
@@ -105,7 +125,7 @@ The T.xml contains your project configuration:
 
 Simply use TBuild's graphical interface to:
 - Set project name and version
-- Manage dependencies
+- Manage dependencies (search Maven Central)
 - Configure build options
 - Choose output formats
 
@@ -119,17 +139,17 @@ java -jar TBuild.jar
 ```
 
 ### Step 2: Create a New Project
-Click "New Project" in the GUI and enter your project details.
+Click "Init" in the GUI to initialize a new project.
 
 ### Step 3: Add Dependencies
-Use the Dependency Manager to search for and add libraries your project needs.
+Use the Maven library search to find and add dependencies your project needs.
 
 ### Step 4: Write Your Code
 Add your Java source files to the `src/main/java/` directory.
 
 ### Step 5: Build and Package
-- Click the **Build** button to compile your project
-- Click the **Package** button to create distribution packages
+- Click the **Nur Build** button to compile your project
+- Click the **Fat JAR** button to create a distribution package
 
 ## Updates
 
@@ -138,8 +158,8 @@ Add your Java source files to the `src/main/java/` directory.
 
 ### How do I install them?
 - Start TBuild as administrator
-- Click the "About" button
-- Click the "Check for Updates" button
+- Click the "Über" (About) button
+- Click the "Nach Updates suchen" (Check for Updates) button
 - Install
 - Wait a moment (until the application reloads)
 - Start
@@ -162,18 +182,15 @@ java -jar /path/to/TBuild.jar
 
 ### Problem: Build fails with dependency errors
 **Solution**:
-- Use the Dependency Manager GUI to verify all dependencies are correct
+- Use the Maven search panel on the right side to verify and add dependencies
 - Check the build log in the console for detailed error messages
 - Verify your internet connection for downloading dependencies
 
 ### Problem: CLI commands not recognized
 **Solution**:
 ```bash
-# Get help on available CLI options
-java -jar TBuild.jar --help
-
-# Check that you're running the correct JAR file
-java -jar TBuild.jar --version
+# List available CLI commands by running init without a project
+java -jar TBuild.jar invalid-command
 ```
 
 ## Documentation and Links
