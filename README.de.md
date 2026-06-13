@@ -21,7 +21,7 @@ TBuild ist ein **starkes, benutzerfreundliches Build-Tool**, das für die Verwal
 
 ## Anforderungen
 
-- **Java Runtime Environment (JRE) 25 oder höher**
+- **Java 21 oder höher** (mit jpackage-Unterstützung für Installer)
 - **Mindestens 512 MB RAM**
 - **50 MB freier Festplattenspeicher**
 
@@ -34,7 +34,7 @@ TBuild ist ein **starkes, benutzerfreundliches Build-Tool**, das für die Verwal
    java -version
    ```
 
-2. Lade die neueste JAR-Datei von der [Releases-Seite](https://github.com/Thillager/TBuild/releases/latest) herunter
+2. Lade die neueste TBuild.jar von der [Releases-Seite](https://github.com/Thillager/TBuild/releases/latest) herunter oder nutze die vorkompilierte JAR in diesem Repository
 
 3. Führe die JAR-Datei aus:
    ```bash
@@ -77,11 +77,11 @@ java -jar TBuild.jar --add-dependency <dependency-name> <version>
 
 ```
 Project/
-├── src/                      # Quellcode
+├── src/
 │   └── main/
 │       └── java/             # Java-Source-Dateien
 ├── libs/                      # Externe Bibliotheken und Abhängigkeiten
-├── production/                # Produktions-Artefakte und Builds
+├── out/                       # Kompilierte Ausgabe und Build-Artefakte
 ├── T.xml                      # Projektkonfiguration (auto-verwaltet)
 ```
 
@@ -92,13 +92,12 @@ TBuild verwaltet die `T.xml`-Datei automatisch über seine GUI. Kein manuelles B
 Die T.xml enthält deine Projektkonfiguration:
 
 ```xml
+<?xml version="1.0" encoding="UTF-8"?>
 <project>
-  <mainClass>Main</mainClass>      <!-- Hauptklasse zum Ausführen -->
-  <appName>MeineApp</appName>      <!-- Anwendungsname -->
-  <version>1.0.0</version>         <!-- Versions-String -->
-  <dependencies>
-    <!-- Abhängigkeiten werden automatisch verwaltet -->
-  </dependencies>
+  <mainClass>Main</mainClass>             <!-- Hauptklasse zum Ausführen -->
+  <appName>MeineApp</appName>             <!-- Anwendungsname -->
+  <version>1.0.0</version>                <!-- Versions-String -->
+  <winUpgradeUuid>...</winUpgradeUuid>    <!-- Windows Installer UUID -->
 </project>
 ```
 
@@ -148,7 +147,7 @@ Füge deine Java-Source-Dateien zum `src/main/java/`-Verzeichnis hinzu.
 ## Troubleshooting
 
 ### Problem: "Java nicht gefunden"
-**Lösung**: Installiere Java Runtime Environment (JRE) von [java.com](https://www.java.com)
+**Lösung**: Installiere Java Runtime Environment (JRE) 21 oder höher von [java.com](https://www.java.com)
 
 ### Problem: JAR-Datei lässt sich nicht ausführen
 **Lösung**:
@@ -156,6 +155,7 @@ Füge deine Java-Source-Dateien zum `src/main/java/`-Verzeichnis hinzu.
 # Überprüfe Java-Version
 java -version
 
+# Stelle sicher, dass du Java 21 oder höher hast
 # Führe mit explizitem Pfad aus
 java -jar /pfad/zu/TBuild.jar
 ```
@@ -185,7 +185,7 @@ java -jar TBuild.jar --version
 ## Lizenz
 
 Dieses Projekt ist unter der **MIT-Lizenz** lizenziert. Siehe [LICENSE](LICENSE) für Details.
-In diesem Projekt werden Dependencies genutzt. Die nötigen Lizenzen stehen in der THIRD_PARTY_LICENSES.md.
+In diesem Projekt werden Dependencies genutzt. Die nötigen Lizenzen stehen in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
 ## Built With
 TBuild nutzt die Power bewährter Open-Source-Bibliotheken für zuverlässiges Abhängigkeitsmanagement und Build-Fähigkeiten.
