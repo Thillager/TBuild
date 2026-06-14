@@ -90,6 +90,13 @@ java -jar TBuild.jar set-main com.example.MyMainClass
 # Set version
 java -jar TBuild.jar set-version 2.0.0
 ```
+## Example projects
+
+The following projects are getting packaged with TBuild.
+1. TIDE (https://github.com/Thillager/TIDE)
+2. TBuild (https://github.com/Thillager/TBuild)
+3. leer
+4. leer
 
 ## Project Structure
 
