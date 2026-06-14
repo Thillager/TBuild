@@ -90,6 +90,13 @@ java -jar TBuild.jar set-main com.example.MeineHauptklasse
 # Version setzen
 java -jar TBuild.jar set-version 2.0.0
 ```
+## Beispiel Projekte
+
+Die folgenden Programme werden mit TBuild verwaltet:
+1. TIDE (https://github.com/Thillager/TIDE)
+2. TBuild (https://github.com/Thillager/TBuild)
+3. leer
+4. leer
 
 ## Projektstruktur
 
