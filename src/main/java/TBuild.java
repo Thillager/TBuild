@@ -991,14 +991,22 @@ public class TBuild {
 				cmd.add("--linux-package-name"); cmd.add(pkg);
 			}
 
-			// Custom jpackage-Argumente aus T.xml
-			String customJPkg = getCustomJPackageArgs();
-			if (!customJPkg.isEmpty()) {
-				for (String a : customJPkg.split("\\s+(?=--)")) {
-					String trimmed = a.trim();
-					if (!trimmed.isEmpty()) cmd.add(trimmed);
+			// Custom jpackage-Argumente aus T.xml (Fehlerbehebung für Option+Wert-Trennung)
+		String customJPkg = getCustomJPackageArgs();
+		if (!customJPkg.isEmpty()) {
+			// Erkennt Argumente wie: --icon assets/icon.ico oder --name "Mein Name"
+			java.util.regex.Matcher m = java.util.regex.Pattern.compile("[^\\s\"']+|\"([^\"]*)\"|'([^']*)'").matcher(customJPkg);
+			while (m.find()) {
+				String arg = m.group();
+				// Entfernt umschließende Anführungszeichen, falls vorhanden
+				if (arg.startsWith("\"") && arg.endsWith("\"")) arg = arg.substring(1, arg.length() - 1);
+				else if (arg.startsWith("'") && arg.endsWith("'")) arg = arg.substring(1, arg.length() - 1);
+				
+				if (!arg.isEmpty()) {
+					cmd.add(arg);
 				}
 			}
+		}
 
 			log("[INFO] Befehl: " + String.join(" ", cmd) + "\n", Color.CYAN);
 			ProcessBuilder pb = new ProcessBuilder(cmd);
