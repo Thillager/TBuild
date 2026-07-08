@@ -17,7 +17,7 @@ TBuild is a **powerful, user-friendly build tool** designed for managing project
 - ✅ **Platform Independent** - Runs on Windows, Linux and macOS (all Java-supporting systems)
 - ✅ **GUI with Java Swing** - Native and responsive user interface
 - ✅ **No Telemetry** - Your data stays yours, no tracking
-- ✅ **Integration** - Seamless integration with TIDE IDE
+- ✅ **Integration** - Seamless integration with ThIDE IDE
 
 ## Requirements
 
@@ -93,7 +93,7 @@ java -jar TBuild.jar set-version 2.0.0
 ## Example projects
 
 The following projects are getting packaged with TBuild.
-1. TIDE (https://github.com/Thillager/TIDE)
+1. ThIDE (https://github.com/Thillager/ThIDE)
 2. TBuild (https://github.com/Thillager/TBuild)
 3. leer
 4. leer
@@ -196,7 +196,7 @@ java -jar TBuild.jar invalid-command
 
 - **Java Documentation**: https://docs.oracle.com/en/java/
 - **GitHub Repository**: https://github.com/Thillager/TBuild
-- **TIDE IDE**: https://github.com/Thillager/TIDE
+- **ThIDE IDE**: https://github.com/Thillager/ThIDE
 
 ## License
 
